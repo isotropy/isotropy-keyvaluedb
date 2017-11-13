@@ -176,7 +176,6 @@ describe("Isotropy FS", () => {
       .length.should.be.empty();
   });
 
-
   it(`Deletes many objects`, async () => {
     const result = await db
       .connection(connStr)
@@ -184,7 +183,7 @@ describe("Isotropy FS", () => {
       .remove(["user1", "user2"]);
 
     __collection("users")
-      .objects.filter(x => x.name === "user1")
+      .objects.filter(x => x.name === "user1" || x.name === "user2")
       .length.should.be.empty();
   });
 });
