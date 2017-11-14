@@ -133,7 +133,7 @@ describe("Isotropy FS", () => {
     }
 
     ex.message.should.equal(
-      "The key countries holds an array. Use lrange instead of get."
+      "The typeof value with key countries is array. Cannot use get."
     );
   });
 
@@ -147,7 +147,7 @@ describe("Isotropy FS", () => {
     }
 
     ex.message.should.equal(
-      "The key user:99 holds an object. Use hmget or hget instead of get."
+      "The typeof value with key user:99 is object. Cannot use get."
     );
   });
 
@@ -251,7 +251,9 @@ describe("Isotropy FS", () => {
       ex = _ex;
     }
 
-    ex.message.should.equal("The key countries does not hold a string or number.");
+    ex.message.should.equal(
+      "The key countries does not hold a string or number."
+    );
   });
 
   it(`Remove a value`, async () => {
@@ -273,22 +275,24 @@ describe("Isotropy FS", () => {
     db
       .__data("testdb")
       .find(x => x.key === "site5")
-      .expiry.should.be.lessThan(now + 11000)
+      .expiry.should.be.lessThan(now + 11000);
   });
 
   it(`Sets an expiry`, async () => {
     await db.open("testdb").expire("site1", 10);
-    
-    const now = Date.now();    
+
+    const now = Date.now();
     db
       .__data("testdb")
       .find(x => x.key === "site1")
-      .expiry.should.be.lessThan(now + 11000)
+      .expiry.should.be.lessThan(now + 11000);
   });
 
   it(`Creates a list`, async () => {
-    const result = await db.open("testdb").rpush("fruits", ["apple", "mango", "pear"]);
-    result.should.equal(3)
+    const result = await db
+      .open("testdb")
+      .rpush("fruits", ["apple", "mango", "pear"]);
+    result.should.equal(3);
     db
       .__data("testdb")
       .find(x => x.key === "fruits")
@@ -296,8 +300,10 @@ describe("Isotropy FS", () => {
   });
 
   it(`Pushes items to an existing list`, async () => {
-    const result = await db.open("testdb").rpush("countries", ["bulgaria", "sweden"]);
-    result.should.equal(5)
+    const result = await db
+      .open("testdb")
+      .rpush("countries", ["bulgaria", "sweden"]);
+    result.should.equal(5);
     db
       .__data("testdb")
       .find(x => x.key === "countries")
@@ -324,46 +330,49 @@ describe("Isotropy FS", () => {
       ]);
   });
 
-  // it(`Gets an item at index`, async () => {
-  //   const result = await db.open("testdb").lindex("countries", 1);
-  //   result.should.deepEqual("france");
-  // });
+  it(`Gets an item at index`, async () => {
+    const result = await db.open("testdb").lindex("countries", 1);
+    result.should.deepEqual("france");
+  });
 
-  // it(`Sets an item at index`, async () => {
-  //   const result = await db.open("testdb").lset("countries", 1, "thailand");
-  //   db
-  //     .__data("testdb")
-  //     .find(x => x.key === "countries")
-  //     .value.should.deepEqual(["vietnam", "thailand", "belgium"]);
-  // });
+  it(`Sets an item at index`, async () => {
+    const result = await db.open("testdb").lset("countries", 1, "thailand");
+    db
+      .__data("testdb")
+      .find(x => x.key === "countries")
+      .value.should.deepEqual(["vietnam", "thailand", "belgium"]);
+  });
 
-  // it(`Gets a list`, async () => {
-  //   const result = await db.open("testdb").lrange("countries");
-  //   result.should.deepEqual(["vietnam", "france", "belgium"]);
-  // });
+  it(`Gets a list`, async () => {
+    const result = await db.open("testdb").lrange("countries");
+    result.should.deepEqual(["vietnam", "france", "belgium"]);
+  });
 
-  // it(`Gets a list range`, async () => {
-  //   const result = await db.open("testdb").lrange("countries", 1, 2);
-  //   result.should.deepEqual(["france", "belgium"]);
-  // });
+  it(`Gets a list range`, async () => {
+    const result = await db.open("testdb").lrange("countries", 1, 2);
+    result.should.deepEqual(["france", "belgium"]);
+  });
 
-  // it(`Removes from a list`, async () => {
-  //   await await db.open("testdb").lrem("countries", "belgium");
-  //   result.should.deepEqual(["vietnam", "france"]);
-  // });
+  it(`Removes from a list`, async () => {
+    const result = await db.open("testdb").lrem("countries", "belgium");
+    db
+      .__data("testdb")
+      .find(x => x.key === "countries")
+      .value.should.deepEqual(["vietnam", "france"]);
+  });
 
-  // it(`Trims a list`, async () => {
-  //   await await db.open("testdb").ltrim("countries", 1, 2);
-  //   db
-  //     .__data("testdb")
-  //     .find(x => x.key === "countries")
-  //     .value.should.deepEqual(["france", "belgium"]);
-  // });
+  it(`Trims a list`, async () => {
+    const result = await db.open("testdb").ltrim("countries", 1, 2);
+    db
+      .__data("testdb")
+      .find(x => x.key === "countries")
+      .value.should.deepEqual(["france", "belgium"]);
+  });
 
-  // it(`Gets the length of a list`, async () => {
-  //   const result = await db.open("testdb").llen("countries");
-  //   result.length.should.equal(3);
-  // });
+  it(`Gets the length of a list`, async () => {
+    const result = await db.open("testdb").llen("countries");
+    result.should.equal(3);
+  });
 
   // it(`Creates a hash`, async () => {
   //   await db

@@ -1,8 +1,20 @@
 import exception from "./exception";
+import { log } from "util";
+
+function isPrimitive(val) {
+  return typeof val === "string" || typeof val === "number";
+}
 
 export default class Db {
   constructor(objects) {
     this.objects = objects || [];
+  }
+
+  withArray(key, fn) {
+    const obj = this.objects.find(x => x.key === key);
+    return typeof obj !== "undefined" && Array.isArray(obj.value)
+      ? fn(obj)
+      : exception(`The value with key ${key} is not an array.`);
   }
 
   async decr(key) {
@@ -28,15 +40,13 @@ export default class Db {
 
   async get(key) {
     const obj = this.objects.find(x => x.key === key);
-    return obj
-      ? !Array.isArray(obj.value)
-        ? typeof obj.value !== "object"
-          ? obj.value
-          : exception(
-              `The key ${key} holds an object. Use hmget or hget instead of get.`
-            )
-        : exception(`The key ${key} holds an array. Use lrange instead of get.`)
-      : exception(`The key ${from} was not found.`);
+    return obj && isPrimitive(obj.value)
+      ? obj.value
+      : exception(
+          `The typeof value with key ${key} is ${Array.isArray(obj.value)
+            ? "array"
+            : typeof obj.value}. Cannot use get.`
+        );
   }
 
   async incr(key) {
@@ -69,6 +79,14 @@ export default class Db {
     return (await this.keys()).filter(x => x.startsWith(str));
   }
 
+  async lindex(key, index) {
+    return this.withArray(key, obj => obj.value.slice(index)[0]);
+  }
+
+  async llen(key) {
+    return this.withArray(key, obj => obj.value.length);
+  }
+
   async lpush(key, list) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj === "undefined"
@@ -80,6 +98,44 @@ export default class Db {
       : Array.isArray(obj.value)
         ? ((obj.value = list.concat(obj.value)), obj.value.length)
         : exception(`Cannot push to non-array having key ${key}.`);
+  }
+
+  async lrange(key, _from, _to) {
+    return this.withArray(key, obj => {
+      const from = typeof _from !== "undefined" ? _from : 0;
+      const to = typeof _to !== "undefined" ? _to : obj.value.length - 1;
+      return obj.value.slice(from, to + 1);
+    });
+  }
+
+  async lrem(key, value) {
+    return this.withArray(key, obj => {
+      obj.value = obj.value.filter(x => x.toString() !== value.toString());
+      return true;
+    });
+  }
+
+  async lset(key, _index, value) {
+    return this.withArray(key, obj => {
+      const index = _index >= 0 ? _index : obj.value.length + _index;
+      return index >= 0
+        ? (() => {
+            const copy = [].concat(obj.value);
+            copy.splice(_index, 1, value);
+            obj.value = copy;
+            return true;
+          })()
+        : exception(`Invalid index ${_index}.`);
+    });
+  }
+
+  async ltrim(key, _from, _to) {
+    return this.withArray(key, obj => {
+      const from = typeof _from !== "undefined" ? _from : 0;
+      const to = typeof _to !== "undefined" ? _to : obj.value.length - 1;
+      obj.value = obj.value.slice(from, to + 1);
+      return true;
+    });
   }
 
   async rename(from, to) {
