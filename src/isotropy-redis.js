@@ -1,10 +1,16 @@
+import Db from "./db";
+
 const databases = {};
 
-export function init(dbName, collections) {
-  database[dbName] = collections;
+export function init(dbName, objects) {
+  const db = new Db(objects);
+  databases[dbName] = db;
 }
 
 export function open(dbName) {
-  return new Db(datbase[dbName]);
+  return databases[dbName];
 }
 
+export function __data(dbName) {
+  return databases[dbName].objects;
+}
