@@ -2,7 +2,7 @@ import should from "should";
 import * as babel from "babel-core";
 import sourceMapSupport from "source-map-support";
 import { log } from "util";
-import * as db from "../isotropy-memdb";
+import * as db from "../isotropy-redis";
 
 sourceMapSupport.install();
 
@@ -12,42 +12,54 @@ describe("Isotropy FS", () => {
   beforeEach(() => {
     const objects = [
       {
-        name: "site1",
-        data: "https://www.google.com",
+        key: "site1",
+        value: "https://www.google.com",
         tags: ["search", "software"]
       },
       {
-        name: "site2",
-        data: "https://www.apple.com",
+        key: "site2",
+        value: "https://www.apple.com",
         expiry: 1530800000000,
         tags: ["phones", "hardware"]
       },
       {
-        name: "site3",
-        data: "https://www.amazon.com",
+        key: "site3",
+        value: "https://www.amazon.com",
         tags: ["software", "ecommerce"]
       },
       {
-        name: "site4",
-        data: "https://www.twitter.com",
+        key: "site4",
+        value: "https://www.twitter.com",
         tags: ["software", "social"]
       },
       {
-        name: "user1",
-        data: "jeswin",
+        key: "user1",
+        value: "jeswin",
         tags: ["admin"]
       },
       {
-        name: "user2",
-        data: "deeps"
+        key: "user2",
+        value: "deeps"
       },
       {
-        name: "user3",
-        data: "tommi"
+        key: "user3",
+        value: "tommi"
       },
       {
-        name: "countries",
-        data: ["vietnam", "france", "belgium"]
+        key: "countries",
+        value: ["vietnam", "france", "belgium"]
+      },
+      {
+        key: "total",
+        value: 1000
+      },
+      {
+        key: "user99",
+        value: {
+          username: "janie",
+          country: "India",
+          verified: 1
+        }
       }
     ];
 
@@ -65,7 +77,9 @@ describe("Isotropy FS", () => {
       "user1",
       "user2",
       "user3",
-      "countries"
+      "countries",
+      "total",
+      "user:99"
     ]);
   });
 
@@ -93,6 +107,56 @@ describe("Isotropy FS", () => {
     result.should.equal("https://www.twitter.com");
   });
 
+  it(`Increment a value`, async () => {
+    await db.open("testdb").incr("total");
+
+    db
+      .__data()
+      .find(x => x.key === "total")
+      .value.should.equal(1001);
+  });
+
+  it(`Increment a value by N`, async () => {
+    await db.open("testdb").incrby("total", 10);
+
+    db
+      .__data()
+      .find(x => x.key === "total")
+      .value.should.equal(1010);
+  });
+
+  it(`Decrement a value`, async () => {
+    await db.open("testdb").decr("total");
+
+    db
+      .__data()
+      .find(x => x.key === "total")
+      .value.should.equal(999);
+  });
+
+  it(`Decrement a value by N`, async () => {
+    await db.open("testdb").decrby("total", 10);
+
+    db
+      .__data()
+      .find(x => x.key === "total")
+      .value.should.equal(990);
+  });
+
+  it(`Increment a value by float N`, async () => {
+    await db.open("testdb").incrbyfloat("total", 10.1);
+
+    db
+      .__data()
+      .find(x => x.key === "total")
+      .value.should.equal(1010.1);
+  });
+
+  it(`Gets the length of a string`, async () => {
+    const length = await db.open("testdb").strlen("strlen", "user1");
+    length.should.equal(6);
+  });
+
   it(`Remove a value`, async () => {
     await db.open("testdb").remove("site4");
     db
@@ -114,7 +178,7 @@ describe("Isotropy FS", () => {
       .expiry.should.equal(1530800000000);
   });
 
-  it(`Create a list`, async () => {
+  it(`Creates a list`, async () => {
     await db.open("testdb").rpush("fruits", ["apple", "mango", "pear"]);
     db
       .__data()
@@ -191,5 +255,79 @@ describe("Isotropy FS", () => {
     result.length.should.equal(3);
   });
 
-  
+  it(`Creates a hash`, async () => {
+    await db
+      .open("testdb")
+      .hmset("user:100", { username: "jeswin", country: "India", verified: 1 });
+    db
+      .__data()
+      .find(x => x.key === "user:100")
+      .value.should.deepEqual({
+        username: "jeswin",
+        country: "India",
+        verified: 1
+      });
+  });
+
+  it(`Creates a hash with a single field`, async () => {
+    await db.open("testdb").hset("user:101", { username: "chad" });
+    db
+      .__data()
+      .find(x => x.key === "user:101")
+      .value.should.deepEqual({
+        username: "chad"
+      });
+  });
+
+  it(`Sets a single field in a hash`, async () => {
+    await db.open("testdb").hset("user:99", { verified: 0 });
+    db
+      .__data()
+      .find(x => x.key === "user:100")
+      .value.should.deepEqual({
+        username: "janie",
+        country: "India",
+        verified: 0
+      });
+  });
+
+  it(`Reads fields of a hash`, async () => {
+    const result = await db
+      .open("testdb")
+      .hmget("user:99", ["username", "verifier"]);
+
+    result.should.deepEqual({ username: "janie", verified: 1 });
+  });
+
+  it(`Reads a single field from a hash`, async () => {
+    const result = await db.open("testdb").hget("user:99", "username");
+    result.should.equal("janie");
+  });
+
+  it(`Reads all fields of a hash`, async () => {
+    const result = await db.open("testdb").hgetall("user:99");
+    result.should.deepEqual({
+      username: "janie",
+      country: "India",
+      verified: 0
+    });
+  });
+
+  it(`Increments a field in a hash by N`, async () => {
+    const result = await db.open("testdb").hincrby("user:99", "verified", 2);
+    result.should.deepEqual({
+      username: "janie",
+      country: "India",
+      verified: 3
+    });
+  });
+
+  it(`Increments a field in a hash by float N`, async () => {
+    const result = await db.open("testdb").hincrby("user:99", "verified", 2.1);
+    result.should.deepEqual({
+      username: "janie",
+      country: "India",
+      verified: 3.1
+    });
+  });
 });
