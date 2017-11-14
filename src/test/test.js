@@ -2,7 +2,7 @@ import should from "should";
 import * as babel from "babel-core";
 import sourceMapSupport from "source-map-support";
 import { log } from "util";
-import * as db from "../isotropy-objectdb";
+import * as db from "../isotropy-memdb";
 
 sourceMapSupport.install();
 
@@ -10,175 +10,184 @@ function table(name) {}
 
 describe("Isotropy FS", () => {
   beforeEach(() => {
-    const collections = [
+    const objects = [
       {
-        name: "sites",
-        objects: [
-          {
-            name: "site1",
-            data: "https://www.google.com",
-            tags: ["search", "software"]
-          },
-          {
-            name: "site2",
-            data: "https://www.apple.com",
-            expiry: 1510800000000,
-            tags: ["phones", "hardware"]
-          },
-          {
-            name: "site3",
-            data: "https://www.amazon.com",
-            tags: ["software", "ecommerce"]
-          },
-          {
-            name: "site4",
-            data: "https://www.twitter.com",
-            tags: ["software", "social"]
-          }
-        ]
+        name: "site1",
+        data: "https://www.google.com",
+        tags: ["search", "software"]
       },
       {
-        name: "users",
-        objects: [
-          {
-            name: "user1",
-            data: "jeswin",
-            tags: ["admin"]
-          },
-          {
-            name: "user2",
-            data: "deeps"
-          },
-          {
-            name: "user3",
-            data: "tommi"
-          }
-        ]
+        name: "site2",
+        data: "https://www.apple.com",
+        expiry: 1530800000000,
+        tags: ["phones", "hardware"]
+      },
+      {
+        name: "site3",
+        data: "https://www.amazon.com",
+        tags: ["software", "ecommerce"]
+      },
+      {
+        name: "site4",
+        data: "https://www.twitter.com",
+        tags: ["software", "social"]
+      },
+      {
+        name: "user1",
+        data: "jeswin",
+        tags: ["admin"]
+      },
+      {
+        name: "user2",
+        data: "deeps"
+      },
+      {
+        name: "user3",
+        data: "tommi"
+      },
+      {
+        name: "countries",
+        data: ["vietnam", "france", "belgium"]
       }
     ];
 
-    db.init("testdb", collections);
+    db.init("testdb", objects);
   });
 
-  it(`Returns a list of collections`, async () => {
-    const results = db.open("testdb").collections();
-    results.should.deepEqual(["sites", "users"]);
+  it(`Returns all keys`, async () => {
+    const results = db.open("testdb").keys();
+
+    results.length.should.equal([
+      "site1",
+      "site2",
+      "site3",
+      "site4",
+      "user1",
+      "user2",
+      "user3",
+      "countries"
+    ]);
   });
 
-  it(`Returns a list of objects in collection`, async () => {
-    const results = db
-      .open()
-      .collection("users")
-      .keys();
-
+  it(`Returns keys starting with`, async () => {
+    const results = db.open("testdb").keysStartingWith("site");
     results.length.should.equal(["site1", "site2", "site3", "site4"]);
   });
 
-  it(`Fetches an object by name`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .get("user1");
-
-    result.should.equal("jeswin");
+  it(`Returns whether a key exists`, async () => {
+    const results = db.open("testdb").hasKey("site1");
+    results.length.should.be.true();
   });
 
-  it(`Fetches objects by tag`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .getByTag("user");
+  it(`Sets a value`, async () => {
+    await db.open("testdb").set("site5", "www.looptype.com");
 
-    result.should.deepEqual(["deep", "tommi"]);
+    db
+      .__data()
+      .find(x => x.key === "site5")
+      .value.should.equal("https://www.looptype.com");
   });
 
-  it(`Fetches tags of an object`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .getTagsOf("user1");
-
-    result.should.deepEqual(["admin"]);
+  it(`Gets a value`, async () => {
+    const result = await db.open("testdb").get("site4");
+    result.should.equal("https://www.twitter.com");
   });
 
-  it(`Fetches expiry of object`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("sites")
-      .getExpiryOf("site2");
-
-    result.should.deepEqual(1510800000000);
+  it(`Remove a value`, async () => {
+    await db.open("testdb").remove("site4");
+    db
+      .__data()
+      .filter(x => x.key === "site4")
+      .should.be.empty();
   });
 
-  it(`Inserts a new object`, async () => {
-    await db
-      .open("testdb")
-      .collection("users")
-      .add("user5", "janie", { expiry: 1510800000000, tags: ["user"] });
+  it(`Sets a value with expiry`, async () => {
+    await db.open("testdb").set("site5", "www.looptype.com", 1530800000000);
 
-    __collection("users")
-      .objects.filter(x => x.name === "user5")
-      .length.should.equal(1);
+    db
+      .__data()
+      .find(x => x.key === "site5")
+      .value.should.equal("https://www.looptype.com");
+    db
+      .__data()
+      .find(x => x.key === "site5")
+      .expiry.should.equal(1530800000000);
   });
 
-  it("Creates an update key (for uploads)", async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .createKey("user10", { expiry: 1510800000000, tags: ["user"] });
-
-    result.should.equal(__collection("users").keys[0].id);
-
-    __collection("users").keys.length.should.equal(1);
-
-    __collection("users").keys[0].name.should.equal("user10");
-    __collection("users").keys[0].expiry.should.equal(1510800000000);
-    __collection("users").keys[0].tags.should.deepEqual(["user"]);
+  it(`Create a list`, async () => {
+    await db.open("testdb").rpush("fruits", ["apple", "mango", "pear"]);
+    db
+      .__data()
+      .find(x => x.key === "fruits")
+      .value.should.deepEqual(["apple", "mango", "pear"]);
   });
 
-  it("Creates multiple update keys (for uploads)", async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .createKeys([
-        ["user10", { expiry: 1510800000000, tags: ["user"] }],
-        ["user11", { expiry: 1510800000000, tags: ["admin"] }]
+  it(`Pushes items to an existing list`, async () => {
+    await db.open("testdb").rpush("countries", ["bulgaria", "sweden"]);
+    db
+      .__data()
+      .find(x => x.key === "countries")
+      .value.should.deepEqual([
+        "vietnam",
+        "france",
+        "belgium",
+        "bulgaria",
+        "sweden"
       ]);
-
-    result.length.should.equal(2);
-    result[0].should.equal(__collection("users").keys[0].id);
-    result[1].should.equal(__collection("users").keys[1].id);
-
-    __collection("users").keys.length.should.equal(2);
-
-    __collection("users").keys[0].name.should.equal("user10");
-    __collection("users").keys[0].expiry.should.equal(1510800000000);
-    __collection("users").keys[0].tags.should.deepEqual(["user"]);
-
-    __collection("users").keys[1].name.should.equal("user11");
-    __collection("users").keys[1].expiry.should.equal(1510800000000);
-    __collection("users").keys[1].tags.should.deepEqual(["admin"]);
   });
 
-  it(`Deletes an object`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .remove("user1");
-
-    __collection("users")
-      .objects.filter(x => x.name === "user1")
-      .length.should.be.empty();
+  it(`Prepend items to a list`, async () => {
+    await db.open("testdb").lpush("countries", ["bulgaria", "sweden"]);
+    db
+      .__data()
+      .find(x => x.key === "countries")
+      .value.should.deepEqual([
+        "bulgaria",
+        "sweden",
+        "vietnam",
+        "france",
+        "belgium"
+      ]);
   });
 
-  it(`Deletes many objects`, async () => {
-    const result = await db
-      .open("testdb")
-      .collection("users")
-      .remove(["user1", "user2"]);
+  it(`Gets an item at index`, async () => {
+    const result = await db.open("testdb").lindex("countries", 1);
+    result.should.deepEqual("france");
+  });
 
-    __collection("users")
-      .objects.filter(x => x.name === "user1" || x.name === "user2")
-      .length.should.be.empty();
+  it(`Sets an item at index`, async () => {
+    const result = await db.open("testdb").lset("countries", 1, "thailand");
+    db
+      .__data()
+      .find(x => x.key === "countries")
+      .value.should.deepEqual(["vietnam", "thailand", "belgium"]);
+  });
+
+  it(`Gets a list`, async () => {
+    const result = await db.open("testdb").lrange("countries");
+    result.should.deepEqual(["vietnam", "france", "belgium"]);
+  });
+
+  it(`Gets a list range`, async () => {
+    const result = await db.open("testdb").lrange("countries", 1, 2);
+    result.should.deepEqual(["france", "belgium"]);
+  });
+
+  it(`Removes from a list`, async () => {
+    await await db.open("testdb").lrem("countries", "belgium");
+    result.should.deepEqual(["vietnam", "france"]);
+  });
+
+  it(`Trims a list`, async () => {
+    await await db.open("testdb").ltrim("countries", 1, 2);
+    db
+      .__data()
+      .find(x => x.key === "countries")
+      .value.should.deepEqual(["france", "belgium"]);
+  });
+
+  it(`Gets the length of a list`, async () => {
+    const result = await db.open("testdb").llen("countries");
+    result.length.should.equal(3);
   });
 });
