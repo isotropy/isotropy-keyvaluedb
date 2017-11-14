@@ -2,7 +2,7 @@ import should from "should";
 import * as babel from "babel-core";
 import sourceMapSupport from "source-map-support";
 import { log } from "util";
-import db from "../isotropy-webstore";
+import * as db from "../isotropy-objectdb";
 
 sourceMapSupport.install();
 
@@ -57,22 +57,17 @@ describe("Isotropy FS", () => {
       }
     ];
 
-    db.init(collections);
-  });
-
-  it(`Creates a connection`, async () => {
-    const conn = db.connection(connStr);
-    conn.connectionString.should.equal(connStr);
+    db.init("testdb", collections);
   });
 
   it(`Returns a list of collections`, async () => {
-    const results = db.connection(connStr).collections();
+    const results = db.open("testdb").collections();
     results.should.deepEqual(["sites", "users"]);
   });
 
   it(`Returns a list of objects in collection`, async () => {
     const results = db
-      .connection(connStr)
+      .open()
       .collection("users")
       .keys();
 
@@ -81,7 +76,7 @@ describe("Isotropy FS", () => {
 
   it(`Fetches an object by name`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .get("user1");
 
@@ -90,7 +85,7 @@ describe("Isotropy FS", () => {
 
   it(`Fetches objects by tag`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .getByTag("user");
 
@@ -99,7 +94,7 @@ describe("Isotropy FS", () => {
 
   it(`Fetches tags of an object`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .getTagsOf("user1");
 
@@ -108,7 +103,7 @@ describe("Isotropy FS", () => {
 
   it(`Fetches expiry of object`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("sites")
       .getExpiryOf("site2");
 
@@ -117,7 +112,7 @@ describe("Isotropy FS", () => {
 
   it(`Inserts a new object`, async () => {
     await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .add("user5", "janie", { expiry: 1510800000000, tags: ["user"] });
 
@@ -128,7 +123,7 @@ describe("Isotropy FS", () => {
 
   it("Creates an update key (for uploads)", async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .createKey("user10", { expiry: 1510800000000, tags: ["user"] });
 
@@ -143,7 +138,7 @@ describe("Isotropy FS", () => {
 
   it("Creates multiple update keys (for uploads)", async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .createKeys([
         ["user10", { expiry: 1510800000000, tags: ["user"] }],
@@ -167,7 +162,7 @@ describe("Isotropy FS", () => {
 
   it(`Deletes an object`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .remove("user1");
 
@@ -178,7 +173,7 @@ describe("Isotropy FS", () => {
 
   it(`Deletes many objects`, async () => {
     const result = await db
-      .connection(connStr)
+      .open("testdb")
       .collection("users")
       .remove(["user1", "user2"]);
 

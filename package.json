@@ -1,5 +1,5 @@
 {
-  "name": "isotropy-webstore",
+  "name": "isotropy-objectdb",
   "version": "0.0.1",
   "author": "Isotropy Team<isotropy@agilehead.com>",
   "contributors": [
@@ -10,7 +10,7 @@
     "test": "mocha dist/test/test.js",
     "debug": "mocha dist/test/test.js --debug-brk"
   },
-  "main": "dist/isotropy-webstore.js",
+  "main": "dist/isotropy-objectdb.js",
   "dependencies": {},
   "devDependencies": {
     "babel-core": "^6.22.1",
