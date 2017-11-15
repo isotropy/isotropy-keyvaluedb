@@ -8,7 +8,7 @@ sourceMapSupport.install();
 
 function table(name) {}
 
-describe("Isotropy FS", () => {
+describe("Isotropy Redis", () => {
   beforeEach(() => {
     const objects = [
       {
