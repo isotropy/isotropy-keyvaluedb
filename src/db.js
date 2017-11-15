@@ -5,9 +5,34 @@ function isPrimitive(val) {
   return typeof val === "string" || typeof val === "number";
 }
 
+function isObject(val) {
+  return typeof val === "object" && !Array.isArray(val);
+}
+
 export default class Db {
   constructor(objects) {
-    this.objects = objects || [];
+    this.cursors = [];
+    this.idCounter = 0;
+    this.cursorIdCounter = 1;
+    this.objects =
+      objects && objects.length
+        ? objects.map(x => ({ ...x, __id: this.idCounter++ }))
+        : [];
+  }
+
+  addObject(obj) {
+    this.objects = this.objects.concat({ ...obj, __id: this.idCounter++ });
+  }
+
+  addCursor(position) {
+    this.cursors = this.cursors.concat({
+      __id: this.cursorIdCounter++,
+      position
+    });
+  }
+
+  removeCursor(counter) {
+    this.cursors = this.cursors.filter(x => x.counter === counter);
   }
 
   withArray(key, fn) {
@@ -17,12 +42,21 @@ export default class Db {
       : exception(`The value with key ${key} is not an array.`);
   }
 
-  async decr(key) {
-    return this.incrBy(key, -1);
+  withObject(key, fn) {
+    const obj = this.objects.find(x => x.key === key);
+    return obj
+      ? isObject(obj.value)
+        ? fn(obj)
+        : exception(`The value with key ${key} is not an object.`)
+      : fn({ key, value: {} });
   }
 
-  async decrBy(key, n) {
-    return this.incrBy(key, -n);
+  async decr(key) {
+    return this.incrby(key, -1);
+  }
+
+  async decrby(key, n) {
+    return this.incrby(key, -n);
   }
 
   async del(key) {
@@ -49,11 +83,73 @@ export default class Db {
         );
   }
 
-  async incr(key) {
-    return this.incrBy(key, 1);
+  async hget(key, field) {
+    return this.withObject(key, obj => obj.value[field]);
   }
 
-  async incrBy(key, n) {
+  async hgetall(key) {
+    return this.withObject(key, obj => obj.value);
+  }
+
+  async hincrby(key, field, n) {
+    return this.withObject(key, obj => {
+      const val = obj.value[field];
+      return !isNaN(val)
+        ? ((obj.value[field] = parseInt(val) + n), obj.value[field])
+        : exception(
+            `The field ${field} of object with key ${key} does not hold a number.`
+          );
+    });
+  }
+
+  async hincrbyfloat(key, field, n) {
+    return this.withObject(key, obj => {
+      const val = obj.value[field];
+      return !isNaN(val)
+        ? ((obj.value[field] = parseFloat(val) + n), obj.value[field])
+        : exception(
+            `The field ${field} of object with key ${key} does not hold a number.`
+          );
+    });
+  }
+
+  async hmget(key, fields) {
+    return this.withObject(key, obj =>
+      fields.reduce((acc, field) => ({ ...acc, [field]: obj.value[field] }), {})
+    );
+  }
+
+  async hmset(key, newObj) {
+    const obj = this.objects.find(x => x.key === key);
+    return !obj
+      ? (this.addObject({
+          key,
+          value: newObj
+        }),
+        true)
+      : isObject(obj.value)
+        ? ((obj.value = { ...obj.value, ...newObj }), true)
+        : exception(`The value with key ${key} is not an object.`);
+  }
+
+  async hset(key, field, value) {
+    const obj = this.objects.find(x => x.key === key);
+    return !obj
+      ? (this.addObject({
+          key,
+          value: { [field]: value }
+        }),
+        true)
+      : isObject(obj.value)
+        ? ((obj.value = { ...obj.value, [field]: value }), true)
+        : exception(`The value with key ${key} is not an object.`);
+  }
+
+  async incr(key) {
+    return this.incrby(key, 1);
+  }
+
+  async incrby(key, n) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
@@ -62,7 +158,7 @@ export default class Db {
       : exception(`The key ${key} was not found.`);
   }
 
-  async incrByFloat(key, n) {
+  async incrbyfloat(key, n) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
@@ -71,12 +167,11 @@ export default class Db {
       : exception(`The key ${key} was not found.`);
   }
 
-  async keys() {
-    return this.objects.map(x => x.key);
-  }
-
-  async keysStartingWith(str) {
-    return (await this.keys()).filter(x => x.startsWith(str));
+  async keys(_pattern) {
+    const pattern = _pattern === "*" ? "" : _pattern;
+    return this.objects
+      .filter(x => new RegExp(pattern).test(x.key))
+      .map(x => x.key);
   }
 
   async lindex(key, index) {
@@ -90,14 +185,14 @@ export default class Db {
   async lpush(key, list) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj === "undefined"
-      ? ((this.objects = this.objects.concat({
+      ? (this.addObject({
           key,
           value: list
-        })),
+        }),
         list.length)
       : Array.isArray(obj.value)
         ? ((obj.value = list.concat(obj.value)), obj.value.length)
-        : exception(`Cannot push to non-array having key ${key}.`);
+        : exception(`The value with key ${key} is not an array.`);
   }
 
   async lrange(key, _from, _to) {
@@ -150,18 +245,50 @@ export default class Db {
   async rpush(key, list) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj === "undefined"
-      ? ((this.objects = this.objects.concat({
+      ? (this.addObject({
           key,
           value: list
-        })),
+        }),
         list.length)
       : Array.isArray(obj.value)
         ? ((obj.value = obj.value.concat(list)), obj.value.length)
-        : exception(`Cannot push to non-array having key ${key}.`);
+        : exception(`The value with key ${key} is not an array.`);
+  }
+
+  async scan(cursorId, _pattern, _count) {
+    const self = this;
+
+    const pattern =
+      typeof _pattern === "undefined" || _pattern === "*" ? "" : _pattern;
+    const count = typeof _count === "undefined" ? this.objects.length : _count;
+
+    function match(x) {
+      return new RegExp(pattern).test(x.key) ? x.key : [];
+    }
+
+    const objects =
+      cursorId === 0
+        ? this.objects
+        : this.objects.filter(
+            x => x.__id > this.cursors.find(c => c.__id === cursorId).position
+          );
+
+    return objects.length
+      ? (function loop([x, ...rest], _acc) {
+          const acc = _acc.concat(match(x));
+          return rest.length === 0
+            ? cursorId === 0
+              ? [0, acc]
+              : (self.removeCursor(cursorId), [0, acc])
+            : acc.length === count
+              ? (self.addCursor(x.__id), [self.cursorIdCounter, acc])
+              : loop(rest, acc);
+        })(objects, [])
+      : [0, []];
   }
 
   async set(key, value, expiry) {
-    this.objects = this.objects.concat({
+    this.addObject({
       key,
       value,
       expiry: Date.now() + expiry * 1000
@@ -173,7 +300,7 @@ export default class Db {
     return obj
       ? typeof obj.value === "string" || typeof obj.value === "number"
         ? obj.value.toString().length
-        : exception(`The key ${key} does not hold a string or number.`)
+        : exception(`The value with key ${key} is not a string or number.`)
       : exception(`The key ${key} was not found.`);
   }
 }

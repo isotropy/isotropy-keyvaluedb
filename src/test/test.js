@@ -63,7 +63,7 @@ describe("Isotropy FS", () => {
   });
 
   it(`Returns all keys`, async () => {
-    const result = await db.open("testdb").keys();
+    const result = await db.open("testdb").keys("*");
 
     result.should.deepEqual([
       "site1",
@@ -79,8 +79,9 @@ describe("Isotropy FS", () => {
     ]);
   });
 
-  it(`Returns keys starting with`, async () => {
-    const result = await db.open("testdb").keysStartingWith("site");
+  it(`Returns all keys starting with site`, async () => {
+    const result = await db.open("testdb").keys("site*");
+
     result.should.deepEqual(["site1", "site2", "site3", "site4"]);
   });
 
@@ -162,7 +163,7 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increment a value by N`, async () => {
-    const result = await db.open("testdb").incrBy("total", 10);
+    const result = await db.open("testdb").incrby("total", 10);
 
     result.should.equal(1010);
     db
@@ -172,7 +173,7 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increment a value by Float N`, async () => {
-    const result = await db.open("testdb").incrByFloat("total", 10.45);
+    const result = await db.open("testdb").incrbyfloat("total", 10.45);
 
     result.should.equal(1010.45);
     db
@@ -216,7 +217,7 @@ describe("Isotropy FS", () => {
   });
 
   it(`Decrement a value by N`, async () => {
-    const result = await db.open("testdb").decrBy("total", 10);
+    const result = await db.open("testdb").decrby("total", 10);
 
     result.should.equal(990);
     db
@@ -252,7 +253,7 @@ describe("Isotropy FS", () => {
     }
 
     ex.message.should.equal(
-      "The key countries does not hold a string or number."
+      "The value with key countries is not a string or number."
     );
   });
 
@@ -316,6 +317,20 @@ describe("Isotropy FS", () => {
       ]);
   });
 
+  it(`Fails to push on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db
+        .open("testdb")
+        .rpush("user1", ["bulgaria", "sweden"]);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Prepend items to a list`, async () => {
     await db.open("testdb").lpush("countries", ["bulgaria", "sweden"]);
     db
@@ -330,9 +345,33 @@ describe("Isotropy FS", () => {
       ]);
   });
 
+  it(`Fails to prepend on non-list`, async () => {
+    let ex;
+
+    try {
+      await db.open("testdb").lpush("user1", ["bulgaria", "sweden"]);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Gets an item at index`, async () => {
     const result = await db.open("testdb").lindex("countries", 1);
     result.should.deepEqual("france");
+  });
+
+  it(`Fails to get an item at index on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").lindex("user1", 1);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
   });
 
   it(`Sets an item at index`, async () => {
@@ -343,14 +382,50 @@ describe("Isotropy FS", () => {
       .value.should.deepEqual(["vietnam", "thailand", "belgium"]);
   });
 
+  it(`Fails to set an item at index on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").lset("user1", 1, "thailand");
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Gets a list`, async () => {
     const result = await db.open("testdb").lrange("countries");
     result.should.deepEqual(["vietnam", "france", "belgium"]);
   });
 
+  it(`Fails to get a non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").lrange("user1");
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Gets a list range`, async () => {
     const result = await db.open("testdb").lrange("countries", 1, 2);
     result.should.deepEqual(["france", "belgium"]);
+  });
+
+  it(`Fails to get a range on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").lrange("user1", 1, 2);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
   });
 
   it(`Removes from a list`, async () => {
@@ -361,6 +436,18 @@ describe("Isotropy FS", () => {
       .value.should.deepEqual(["vietnam", "france"]);
   });
 
+  it(`Fails to remove an item on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").lrem("user1", "belgium");
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Trims a list`, async () => {
     const result = await db.open("testdb").ltrim("countries", 1, 2);
     db
@@ -369,84 +456,186 @@ describe("Isotropy FS", () => {
       .value.should.deepEqual(["france", "belgium"]);
   });
 
+  it(`Fails to trim on non-list`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").ltrim("user1", 1, 2);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
+
   it(`Gets the length of a list`, async () => {
     const result = await db.open("testdb").llen("countries");
     result.should.equal(3);
   });
 
-  // it(`Creates a hash`, async () => {
-  //   await db
-  //     .open("testdb")
-  //     .hmset("user:100", { username: "jeswin", country: "India", verified: 1 });
-  //   db
-  //     .__data("testdb")
-  //     .find(x => x.key === "user:100")
-  //     .value.should.deepEqual({
-  //       username: "jeswin",
-  //       country: "India",
-  //       verified: 1
-  //     });
-  // });
+  it(`Fails to get the length of non-list`, async () => {
+    let ex;
 
-  // it(`Creates a hash with a single field`, async () => {
-  //   await db.open("testdb").hset("user:101", { username: "chad" });
-  //   db
-  //     .__data("testdb")
-  //     .find(x => x.key === "user:101")
-  //     .value.should.deepEqual({
-  //       username: "chad"
-  //     });
-  // });
+    try {
+      const result = await db.open("testdb").llen("user1");
+    } catch (_ex) {
+      ex = _ex;
+    }
 
-  // it(`Sets a single field in a hash`, async () => {
-  //   await db.open("testdb").hset("user:99", { verified: 0 });
-  //   db
-  //     .__data("testdb")
-  //     .find(x => x.key === "user:100")
-  //     .value.should.deepEqual({
-  //       username: "janie",
-  //       country: "India",
-  //       verified: 0
-  //     });
-  // });
+    ex.message.should.equal("The value with key user1 is not an array.");
+  });
 
-  // it(`Reads fields of a hash`, async () => {
-  //   const result = await db
-  //     .open("testdb")
-  //     .hmget("user:99", ["username", "verifier"]);
+  it(`Creates a hash`, async () => {
+    await db
+      .open("testdb")
+      .hmset("user:100", { username: "jeswin", country: "India", verified: 1 });
+    db
+      .__data("testdb")
+      .find(x => x.key === "user:100")
+      .value.should.deepEqual({
+        username: "jeswin",
+        country: "India",
+        verified: 1
+      });
+  });
 
-  //   result.should.deepEqual({ username: "janie", verified: 1 });
-  // });
+  it(`Merges into an existing hash`, async () => {
+    await db.open("testdb").hmset("user:99", { city: "Bombay", blocked: 1 });
 
-  // it(`Reads a single field from a hash`, async () => {
-  //   const result = await db.open("testdb").hget("user:99", "username");
-  //   result.should.equal("janie");
-  // });
+    db
+      .__data("testdb")
+      .find(x => x.key === "user:99")
+      .value.should.deepEqual({
+        username: "janie",
+        country: "India",
+        city: "Bombay",
+        blocked: 1,
+        verified: 1
+      });
+  });
 
-  // it(`Reads all fields of a hash`, async () => {
-  //   const result = await db.open("testdb").hgetall("user:99");
-  //   result.should.deepEqual({
-  //     username: "janie",
-  //     country: "India",
-  //     verified: 0
-  //   });
-  // });
+  it(`Fails to set fields in hash if item is a non-hash`, async () => {
+    let ex;
 
-  // it(`Increments a field in a hash by N`, async () => {
-  //   const result = await db.open("testdb").hincrby("user:99", "verified", 2);
-  //   result.should.deepEqual({
-  //     username: "janie",
-  //     country: "India",
-  //     verified: 3
-  //   });
-  // });
+    try {
+      await db
+        .open("testdb")
+        .hmset("user1", { username: "jeswin", country: "India", verified: 1 });
+    } catch (_ex) {
+      ex = _ex;
+    }
 
-  // it(`Increments a field in a hash by float N`, async () => {
-  //   const result = await db.open("testdb").hincrby("user:99", "verified", 2.1);
-  //   result.should.deepEqual({
-  //     username: "janie",
-  //     country: "India",
-  //     verified: 3.1
-  //   });
-  // });
+    ex.message.should.equal("The value with key user1 is not an object.");
+  });
+
+  it(`Creates a hash with a single field`, async () => {
+    await db.open("testdb").hset("user:99", "city", "Bombay");
+
+    db
+      .__data("testdb")
+      .find(x => x.key === "user:99")
+      .value.should.deepEqual({
+        username: "janie",
+        country: "India",
+        city: "Bombay",
+        verified: 1
+      });
+  });
+
+  it(`Reads fields of a hash`, async () => {
+    const result = await db
+      .open("testdb")
+      .hmget("user:99", ["username", "verified"]);
+
+    result.should.deepEqual({ username: "janie", verified: 1 });
+  });
+
+  it(`Fails to read fields from a non-hash`, async () => {
+    let ex;
+
+    try {
+      const result = await db
+        .open("testdb")
+        .hmget("user1", ["username", "verified"]);
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an object.");
+  });
+
+  it(`Reads a single field from a hash`, async () => {
+    const result = await db.open("testdb").hget("user:99", "username");
+    result.should.equal("janie");
+  });
+
+  it(`Fails to read single field from a non-hash`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").hget("user1", "username");
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an object.");
+  });
+
+  it(`Reads all fields of a hash`, async () => {
+    const result = await db.open("testdb").hgetall("user:99");
+    result.should.deepEqual({
+      username: "janie",
+      country: "India",
+      verified: 1
+    });
+  });
+
+  it(`Fails to read all fields of a non-hash`, async () => {
+    let ex;
+
+    try {
+      const result = await db.open("testdb").hgetall("user1");
+    } catch (_ex) {
+      ex = _ex;
+    }
+
+    ex.message.should.equal("The value with key user1 is not an object.");
+  });
+
+  it(`Increments a field in a hash by N`, async () => {
+    const result = await db.open("testdb").hincrby("user:99", "verified", 2);
+    result.should.equal(3);
+  });
+
+  it(`Increments a field in a hash by float N`, async () => {
+    const result = await db
+      .open("testdb")
+      .hincrbyfloat("user:99", "verified", 2.5);
+    result.should.equal(3.5);
+  });
+
+  it(`Scans keys`, async () => {
+    const result1 = await db.open("testdb").scan(0, "*", 3);
+    result1.should.deepEqual([2, ["site1", "site2", "site3"]]);
+    const result2 = await db.open("testdb").scan(1, "*", 3);
+    result2.should.deepEqual([3, ["site4", "user1", "user2"]]);
+  });
+
+
+  it(`Scans a set of keys with pattern`, async () => {
+    const result1 = await db.open("testdb").scan(0, "site*");
+    result1.should.deepEqual([0, ["site1", "site2", "site3", "site4"]]);
+  });
+
+  it(`Scans a set of keys with pattern and count`, async () => {
+    const result1 = await db.open("testdb").scan(0, "site*", 3);
+    result1.should.deepEqual([2, ["site1", "site2", "site3"]]);
+    const result2 = await db.open("testdb").scan(1, "site*", 3);
+    result2.should.deepEqual([0, ["site4"]]);
+  });
+
+  it(`Scans a set of keys with pattern and large count`, async () => {
+    const result1 = await db.open("testdb").scan(0, "site*", 1000);
+    result1.should.deepEqual([0, ["site1", "site2", "site3", "site4"]]);
+  });
 });
