@@ -103,7 +103,13 @@ export default class Db {
 
   async expire(key, seconds) {
     const obj = this.objects.find(x => x.key === key);
-    return obj ? ((obj.expiry = Date.now() + seconds * 1000), "OK") : false;
+    return typeof obj !== "undefined"
+      ? (() => {
+          const expiry = Date.now() + seconds * 1000;
+          this.replaceObject(obj, { ...obj, expiry });
+          return 1;
+        })()
+      : exception(`The key ${key} was not found.`);
   }
 
   async get(key) {
@@ -129,11 +135,14 @@ export default class Db {
     return this.withObject(key, obj => {
       const val = obj.value[field];
       return !isNaN(val)
-        ? (this.replaceObject(obj, {
-            ...obj,
-            value: { ...obj.value, [field]: parseInt(val) + n }
-          }),
-          parseInt(val) + n)
+        ? (() => {
+            const newVal = parseInt(val) + n;
+            this.replaceObject(obj, {
+              ...obj,
+              value: { ...obj.value, [field]: newVal }
+            });
+            return newVal;
+          })()
         : exception(
             `The field ${field} of object with key ${key} does not hold a number.`
           );
@@ -144,11 +153,14 @@ export default class Db {
     return this.withObject(key, obj => {
       const val = obj.value[field];
       return !isNaN(val)
-        ? (this.replaceObject(obj, {
-            ...obj,
-            value: { ...obj.value, [field]: parseFloat(val) + n }
-          }),
-          parseFloat(val) + n)
+        ? (() => {
+            const newVal = parseFloat(val) + n;
+            this.replaceObject(obj, {
+              ...obj,
+              value: { ...obj.value, [field]: newVal }
+            });
+            return newVal;
+          })()
         : exception(
             `The field ${field} of object with key ${key} does not hold a number.`
           );
@@ -203,8 +215,11 @@ export default class Db {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
-        ? (this.replaceObject(obj, { ...obj, value: parseInt(obj.value) + n }),
-          parseInt(obj.value) + n)
+        ? (() => {
+            const newVal = parseInt(obj.value) + n;
+            this.replaceObject(obj, { ...obj, value: newVal });
+            return newVal;
+          })()
         : exception(`The key ${key} does not hold a number.`)
       : exception(`The key ${key} was not found.`);
   }
@@ -213,11 +228,14 @@ export default class Db {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
-        ? (this.replaceObject(obj, {
-            ...obj,
-            value: parseFloat(obj.value) + n
-          }),
-          parseFloat(obj.value) + n)
+        ? (() => {
+            const newVal = parseFloat(obj.value) + n;
+            this.replaceObject(obj, {
+              ...obj,
+              value: newVal
+            });
+            return newVal;
+          })()
         : exception(`The key ${key} does not hold a number.`)
       : exception(`The key ${key} was not found.`);
   }
@@ -246,8 +264,11 @@ export default class Db {
         }),
         list.length)
       : Array.isArray(obj.value)
-        ? (this.replaceObject(obj, { ...obj, value: list.concat(obj.value) }),
-          list.concat(obj.value).length)
+        ? (() => {
+            const newList = list.concat(obj.value);
+            this.replaceObject(obj, { ...obj, value: newList });
+            return newList.length;
+          })()
         : exception(`The value with key ${key} is not an array.`);
   }
 
@@ -320,8 +341,11 @@ export default class Db {
         }),
         list.length)
       : Array.isArray(obj.value)
-        ? (this.replaceObject(obj, { ...obj, value: obj.value.concat(list) }),
-          obj.value.concat(list).length)
+        ? (() => {
+            const newList = obj.value.concat(list);
+            this.replaceObject(obj, { ...obj, value: newList });
+            return newList.length;
+          })()
         : exception(`The value with key ${key} is not an array.`);
   }
 
