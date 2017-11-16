@@ -7,8 +7,8 @@ export function init(dbName, objects) {
   databases[dbName] = db;
 }
 
-export function open(dbName) {
-  return databases[dbName];
+export async function open(dbName) {
+  return databases[dbName].open();
 }
 
 export function __data(dbName) {

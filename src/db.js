@@ -1,5 +1,5 @@
+import Multi from "./multi";
 import exception from "./exception";
-import { log } from "util";
 
 function isPrimitive(val) {
   return typeof val === "string" || typeof val === "number";
@@ -18,10 +18,8 @@ export default class Db {
       objects && objects.length
         ? objects.map(x => ({ ...x, __id: this.idCounter++ }))
         : [];
-  }
-
-  addObject(obj) {
-    this.objects = this.objects.concat({ ...obj, __id: this.idCounter++ });
+    this.state = "CLOSED";
+    this.transaction = undefined;
   }
 
   addCursor(position) {
@@ -29,6 +27,14 @@ export default class Db {
       __id: this.cursorIdCounter++,
       position
     });
+  }
+
+  addObject(obj) {
+    this.objects = this.objects.concat({ ...obj, __id: this.idCounter++ });
+  }
+
+  replaceObject(obj, newObj) {
+    this.objects = this.objects.map(o => (o === obj ? newObj : o));
   }
 
   removeCursor(counter) {
@@ -51,6 +57,10 @@ export default class Db {
       : fn({ key, value: {} });
   }
 
+  async close() {
+    this.state = "CLOSED";
+  }
+
   async decr(key) {
     return this.incrby(key, -1);
   }
@@ -60,7 +70,31 @@ export default class Db {
   }
 
   async del(key) {
-    return (this.objects = this.objects.filter(x => x.key !== key)), true;
+    return (this.objects = this.objects.filter(x => x.key !== key)), "OK";
+  }
+
+  async discard() {
+    this.transaction = undefined;
+  }
+
+  async exec() {
+    const snapshot = JSON.parse(
+      JSON.stringify({
+        cursors: this.cursors,
+        idCounter: this.idCounter,
+        cursorIdCounter: this.cursorIdCounter,
+        objects: this.objects
+      })
+    );
+    try {
+      debugger;
+      return await Promise.all(this.transaction.queue.map(fn => fn(this)));
+    } catch (ex) {
+      this.cursors = snapshot.cursors;
+      this.idCounter = snapshot.idCounter;
+      this.cursorIdCounter = snapshot.cursorIdCounter;
+      this.objects = snapshot.objects;
+    }
   }
 
   async exists(key) {
@@ -69,7 +103,7 @@ export default class Db {
 
   async expire(key, seconds) {
     const obj = this.objects.find(x => x.key === key);
-    return obj ? ((obj.expiry = Date.now() + seconds * 1000), true) : false;
+    return obj ? ((obj.expiry = Date.now() + seconds * 1000), "OK") : false;
   }
 
   async get(key) {
@@ -95,7 +129,11 @@ export default class Db {
     return this.withObject(key, obj => {
       const val = obj.value[field];
       return !isNaN(val)
-        ? ((obj.value[field] = parseInt(val) + n), obj.value[field])
+        ? (this.replaceObject(obj, {
+            ...obj,
+            value: { ...obj.value, [field]: parseInt(val) + n }
+          }),
+          parseInt(val) + n)
         : exception(
             `The field ${field} of object with key ${key} does not hold a number.`
           );
@@ -106,7 +144,11 @@ export default class Db {
     return this.withObject(key, obj => {
       const val = obj.value[field];
       return !isNaN(val)
-        ? ((obj.value[field] = parseFloat(val) + n), obj.value[field])
+        ? (this.replaceObject(obj, {
+            ...obj,
+            value: { ...obj.value, [field]: parseFloat(val) + n }
+          }),
+          parseFloat(val) + n)
         : exception(
             `The field ${field} of object with key ${key} does not hold a number.`
           );
@@ -126,9 +168,13 @@ export default class Db {
           key,
           value: newObj
         }),
-        true)
+        "OK")
       : isObject(obj.value)
-        ? ((obj.value = { ...obj.value, ...newObj }), true)
+        ? (this.replaceObject(obj, {
+            ...obj,
+            value: { ...obj.value, ...newObj }
+          }),
+          true)
         : exception(`The value with key ${key} is not an object.`);
   }
 
@@ -139,9 +185,13 @@ export default class Db {
           key,
           value: { [field]: value }
         }),
-        true)
+        "OK")
       : isObject(obj.value)
-        ? ((obj.value = { ...obj.value, [field]: value }), true)
+        ? (this.replaceObject(obj, {
+            ...obj,
+            value: { ...obj.value, [field]: value }
+          }),
+          "OK")
         : exception(`The value with key ${key} is not an object.`);
   }
 
@@ -153,7 +203,8 @@ export default class Db {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
-        ? ((obj.value = parseInt(obj.value) + n), obj.value)
+        ? (this.replaceObject(obj, { ...obj, value: parseInt(obj.value) + n }),
+          parseInt(obj.value) + n)
         : exception(`The key ${key} does not hold a number.`)
       : exception(`The key ${key} was not found.`);
   }
@@ -162,7 +213,11 @@ export default class Db {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
-        ? ((obj.value = parseFloat(obj.value) + n), obj.value)
+        ? (this.replaceObject(obj, {
+            ...obj,
+            value: parseFloat(obj.value) + n
+          }),
+          parseFloat(obj.value) + n)
         : exception(`The key ${key} does not hold a number.`)
       : exception(`The key ${key} was not found.`);
   }
@@ -191,7 +246,8 @@ export default class Db {
         }),
         list.length)
       : Array.isArray(obj.value)
-        ? ((obj.value = list.concat(obj.value)), obj.value.length)
+        ? (this.replaceObject(obj, { ...obj, value: list.concat(obj.value) }),
+          list.concat(obj.value).length)
         : exception(`The value with key ${key} is not an array.`);
   }
 
@@ -205,8 +261,11 @@ export default class Db {
 
   async lrem(key, value) {
     return this.withArray(key, obj => {
-      obj.value = obj.value.filter(x => x.toString() !== value.toString());
-      return true;
+      this.replaceObject(obj, {
+        ...obj,
+        value: obj.value.filter(x => x.toString() !== value.toString())
+      });
+      return "OK";
     });
   }
 
@@ -217,8 +276,8 @@ export default class Db {
         ? (() => {
             const copy = [].concat(obj.value);
             copy.splice(_index, 1, value);
-            obj.value = copy;
-            return true;
+            this.replaceObject(obj, { ...obj, value: copy });
+            return "OK";
           })()
         : exception(`Invalid index ${_index}.`);
     });
@@ -228,9 +287,19 @@ export default class Db {
     return this.withArray(key, obj => {
       const from = typeof _from !== "undefined" ? _from : 0;
       const to = typeof _to !== "undefined" ? _to : obj.value.length - 1;
-      obj.value = obj.value.slice(from, to + 1);
-      return true;
+      this.replaceObject(obj, { ...obj, value: obj.value.slice(from, to + 1) });
+      return "OK";
     });
+  }
+
+  async multi() {
+    this.transaction = new Multi();
+    return this.transaction;
+  }
+
+  open() {
+    this.state = "OPEN";
+    return this;
   }
 
   async rename(from, to) {
@@ -238,7 +307,7 @@ export default class Db {
       ? ((this.objects = this.objects.map(
           x => (x.key === from ? { ...x, key: to } : x)
         )),
-        true)
+        "OK")
       : exception(`The key ${from} was not found.`);
   }
 
@@ -251,7 +320,8 @@ export default class Db {
         }),
         list.length)
       : Array.isArray(obj.value)
-        ? ((obj.value = obj.value.concat(list)), obj.value.length)
+        ? (this.replaceObject(obj, { ...obj, value: obj.value.concat(list) }),
+          obj.value.concat(list).length)
         : exception(`The value with key ${key} is not an array.`);
   }
 
@@ -288,11 +358,15 @@ export default class Db {
   }
 
   async set(key, value, expiry) {
-    this.addObject({
+    const obj = this.objects.find(x => x.key === key);
+    const newObj = {
       key,
       value,
-      expiry: Date.now() + expiry * 1000
-    });
+      expiry: expiry ? Date.now() + expiry * 1000 : -1
+    };
+    return (
+      !obj ? this.addObject(newObj) : this.replaceObject(obj, newObj), "OK"
+    );
   }
 
   async strlen(key) {

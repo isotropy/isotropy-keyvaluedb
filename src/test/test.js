@@ -63,7 +63,8 @@ describe("Isotropy FS", () => {
   });
 
   it(`Returns all keys`, async () => {
-    const result = await db.open("testdb").keys("*");
+    const conn = await db.open("testdb");
+    const result = await conn.keys("*");
 
     result.should.deepEqual([
       "site1",
@@ -80,18 +81,23 @@ describe("Isotropy FS", () => {
   });
 
   it(`Returns all keys starting with site`, async () => {
-    const result = await db.open("testdb").keys("site*");
-
+    const conn = await db.open("testdb");
+    const result = await conn.keys("site*");
+    conn.close();
     result.should.deepEqual(["site1", "site2", "site3", "site4"]);
   });
 
   it(`Returns whether a key exists`, async () => {
-    const result = await db.open("testdb").exists("site1");
+    const conn = await db.open("testdb");
+    const result = await conn.exists("site1");
+    conn.close();
     result.should.be.true();
   });
 
   it(`Rename a key`, async () => {
-    const result = await db.open("testdb").rename("site4", "social1");
+    const conn = await db.open("testdb");
+    const result = await conn.rename("site4", "social1");
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "social1")
@@ -102,7 +108,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").rename("site69", "social1");
+      const conn = await db.open("testdb");
+      const result = await conn.rename("site69", "social1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -111,7 +119,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Sets a value`, async () => {
-    await db.open("testdb").set("site5", "https://www.looptype.com");
+    const conn = await db.open("testdb");
+    await conn.set("site5", "https://www.looptype.com");
+    conn.close();
 
     db
       .__data("testdb")
@@ -119,8 +129,52 @@ describe("Isotropy FS", () => {
       .value.should.equal("https://www.looptype.com");
   });
 
+  it(`Replaces a value`, async () => {
+    const conn = await db.open("testdb");
+    await conn.set("site4", "https://www.looptype.com");
+    conn.close();
+
+    db
+      .__data("testdb")
+      .find(x => x.key === "site4")
+      .value.should.equal("https://www.looptype.com");
+  });
+
+  it(`Executes a transaction`, async () => {
+    const conn = await db.open("testdb");
+
+    const multi = await conn.multi();
+    await multi.set("site4", "https://www.looptype.com");
+    await multi.incr("total");
+    await multi.incr("total");
+    const result = await conn.exec();
+
+    result.should.deepEqual(['OK', 1001, 1002]);
+    
+    db
+      .__data("testdb")
+      .find(x => x.key === "site4")
+      .value.should.equal("https://www.looptype.com");
+  });
+
+  it(`Rolls back a failed transaction`, async () => {
+    const conn = await db.open("testdb");
+
+    const multi = await conn.multi();
+    await multi.set("site4", "https://www.looptype.com");
+    await multi.incr("total1");
+    const result = await conn.exec();
+
+    db
+      .__data("testdb")
+      .find(x => x.key === "site4")
+      .value.should.equal("https://www.twitter.com");
+  });
+
   it(`Gets a value`, async () => {
-    const result = await db.open("testdb").get("site4");
+    const conn = await db.open("testdb");
+    const result = await conn.get("site4");
+    conn.close();
     result.should.equal("https://www.twitter.com");
   });
 
@@ -128,7 +182,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").get("countries");
+      const conn = await db.open("testdb");
+      const result = await conn.get("countries");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -142,7 +198,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").get("user:99");
+      const conn = await db.open("testdb");
+      const result = await conn.get("user:99");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -153,7 +211,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increment a value by one`, async () => {
-    const result = await db.open("testdb").incr("total");
+    const conn = await db.open("testdb");
+    const result = await conn.incr("total");
+    conn.close();
 
     result.should.equal(1001);
     db
@@ -163,7 +223,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increment a value by N`, async () => {
-    const result = await db.open("testdb").incrby("total", 10);
+    const conn = await db.open("testdb");
+    const result = await conn.incrby("total", 10);
+    conn.close();
 
     result.should.equal(1010);
     db
@@ -173,7 +235,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increment a value by Float N`, async () => {
-    const result = await db.open("testdb").incrbyfloat("total", 10.45);
+    const conn = await db.open("testdb");
+    const result = await conn.incrbyfloat("total", 10.45);
+    conn.close();
 
     result.should.equal(1010.45);
     db
@@ -186,7 +250,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").incr("total1");
+      const conn = await db.open("testdb");
+      const result = await conn.incr("total1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -198,7 +264,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").incr("site1");
+      const conn = await db.open("testdb");
+      const result = await conn.incr("site1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -207,7 +275,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Decrement a value by one`, async () => {
-    const result = await db.open("testdb").decr("total");
+    const conn = await db.open("testdb");
+    const result = await conn.decr("total");
+    conn.close();
 
     result.should.equal(999);
     db
@@ -217,7 +287,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Decrement a value by N`, async () => {
-    const result = await db.open("testdb").decrby("total", 10);
+    const conn = await db.open("testdb");
+    const result = await conn.decrby("total", 10);
+    conn.close();
 
     result.should.equal(990);
     db
@@ -227,7 +299,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Gets the length of a string`, async () => {
-    const length = await db.open("testdb").strlen("user1");
+    const conn = await db.open("testdb");
+    const length = await conn.strlen("user1");
+    conn.close();
     length.should.equal(6);
   });
 
@@ -235,7 +309,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const length = await db.open("testdb").strlen("doesnotexist");
+      const conn = await db.open("testdb");
+      const length = await conn.strlen("doesnotexist");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -247,7 +323,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const length = await db.open("testdb").strlen("countries");
+      const conn = await db.open("testdb");
+      const length = await conn.strlen("countries");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -258,7 +336,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Remove a value`, async () => {
-    await db.open("testdb").del("site4");
+    const conn = await db.open("testdb");
+    await conn.del("site4");
+    conn.close();
     db
       .__data("testdb")
       .filter(x => x.key === "site4")
@@ -266,7 +346,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Sets a value with expiry`, async () => {
-    await db.open("testdb").set("site5", "https://www.looptype.com", 10);
+    const conn = await db.open("testdb");
+    await conn.set("site5", "https://www.looptype.com", 10);
+    conn.close();
 
     const now = Date.now();
     db
@@ -280,7 +362,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Sets an expiry`, async () => {
-    await db.open("testdb").expire("site1", 10);
+    const conn = await db.open("testdb");
+    await conn.expire("site1", 10);
+    conn.close();
 
     const now = Date.now();
     db
@@ -290,9 +374,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Creates a list`, async () => {
-    const result = await db
-      .open("testdb")
-      .rpush("fruits", ["apple", "mango", "pear"]);
+    const conn = await db.open("testdb");
+    const result = await conn.rpush("fruits", ["apple", "mango", "pear"]);
+    conn.close();
     result.should.equal(3);
     db
       .__data("testdb")
@@ -301,9 +385,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Pushes items to an existing list`, async () => {
-    const result = await db
-      .open("testdb")
-      .rpush("countries", ["bulgaria", "sweden"]);
+    const conn = await db.open("testdb");
+    const result = await conn.rpush("countries", ["bulgaria", "sweden"]);
+    conn.close();
     result.should.equal(5);
     db
       .__data("testdb")
@@ -321,9 +405,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db
-        .open("testdb")
-        .rpush("user1", ["bulgaria", "sweden"]);
+      const conn = await db.open("testdb");
+      const result = await conn.rpush("user1", ["bulgaria", "sweden"]);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -332,7 +416,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Prepend items to a list`, async () => {
-    await db.open("testdb").lpush("countries", ["bulgaria", "sweden"]);
+    const conn = await db.open("testdb");
+    await conn.lpush("countries", ["bulgaria", "sweden"]);
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "countries")
@@ -349,7 +435,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      await db.open("testdb").lpush("user1", ["bulgaria", "sweden"]);
+      const conn = await db.open("testdb");
+      await conn.lpush("user1", ["bulgaria", "sweden"]);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -358,7 +446,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Gets an item at index`, async () => {
-    const result = await db.open("testdb").lindex("countries", 1);
+    const conn = await db.open("testdb");
+    const result = await conn.lindex("countries", 1);
+    conn.close();
     result.should.deepEqual("france");
   });
 
@@ -366,7 +456,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").lindex("user1", 1);
+      const conn = await db.open("testdb");
+      const result = await conn.lindex("user1", 1);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -375,7 +467,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Sets an item at index`, async () => {
-    const result = await db.open("testdb").lset("countries", 1, "thailand");
+    const conn = await db.open("testdb");
+    const result = await conn.lset("countries", 1, "thailand");
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "countries")
@@ -386,7 +480,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").lset("user1", 1, "thailand");
+      const conn = await db.open("testdb");
+      const result = await conn.lset("user1", 1, "thailand");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -395,7 +491,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Gets a list`, async () => {
-    const result = await db.open("testdb").lrange("countries");
+    const conn = await db.open("testdb");
+    const result = await conn.lrange("countries");
+    conn.close();
     result.should.deepEqual(["vietnam", "france", "belgium"]);
   });
 
@@ -403,7 +501,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").lrange("user1");
+      const conn = await db.open("testdb");
+      const result = await conn.lrange("user1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -412,7 +512,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Gets a list range`, async () => {
-    const result = await db.open("testdb").lrange("countries", 1, 2);
+    const conn = await db.open("testdb");
+    const result = await conn.lrange("countries", 1, 2);
+    conn.close();
     result.should.deepEqual(["france", "belgium"]);
   });
 
@@ -420,7 +522,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").lrange("user1", 1, 2);
+      const conn = await db.open("testdb");
+      const result = await conn.lrange("user1", 1, 2);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -429,7 +533,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Removes from a list`, async () => {
-    const result = await db.open("testdb").lrem("countries", "belgium");
+    const conn = await db.open("testdb");
+    const result = await conn.lrem("countries", "belgium");
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "countries")
@@ -440,7 +546,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").lrem("user1", "belgium");
+      const conn = await db.open("testdb");
+      const result = await conn.lrem("user1", "belgium");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -449,7 +557,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Trims a list`, async () => {
-    const result = await db.open("testdb").ltrim("countries", 1, 2);
+    const conn = await db.open("testdb");
+    const result = await conn.ltrim("countries", 1, 2);
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "countries")
@@ -460,7 +570,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").ltrim("user1", 1, 2);
+      const conn = await db.open("testdb");
+      const result = await conn.ltrim("user1", 1, 2);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -469,7 +581,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Gets the length of a list`, async () => {
-    const result = await db.open("testdb").llen("countries");
+    const conn = await db.open("testdb");
+    const result = await conn.llen("countries");
+    conn.close();
     result.should.equal(3);
   });
 
@@ -477,7 +591,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").llen("user1");
+      const conn = await db.open("testdb");
+      const result = await conn.llen("user1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -486,9 +602,13 @@ describe("Isotropy FS", () => {
   });
 
   it(`Creates a hash`, async () => {
-    await db
-      .open("testdb")
-      .hmset("user:100", { username: "jeswin", country: "India", verified: 1 });
+    const conn = await db.open("testdb");
+    await conn.hmset("user:100", {
+      username: "jeswin",
+      country: "India",
+      verified: 1
+    });
+    conn.close();
     db
       .__data("testdb")
       .find(x => x.key === "user:100")
@@ -500,7 +620,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Merges into an existing hash`, async () => {
-    await db.open("testdb").hmset("user:99", { city: "Bombay", blocked: 1 });
+    const conn = await db.open("testdb");
+    await conn.hmset("user:99", { city: "Bombay", blocked: 1 });
+    conn.close();
 
     db
       .__data("testdb")
@@ -518,9 +640,13 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      await db
-        .open("testdb")
-        .hmset("user1", { username: "jeswin", country: "India", verified: 1 });
+      const conn = await db.open("testdb");
+      await conn.hmset("user1", {
+        username: "jeswin",
+        country: "India",
+        verified: 1
+      });
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -529,7 +655,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Creates a hash with a single field`, async () => {
-    await db.open("testdb").hset("user:99", "city", "Bombay");
+    const conn = await db.open("testdb");
+    await conn.hset("user:99", "city", "Bombay");
+    conn.close();
 
     db
       .__data("testdb")
@@ -543,9 +671,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Reads fields of a hash`, async () => {
-    const result = await db
-      .open("testdb")
-      .hmget("user:99", ["username", "verified"]);
+    const conn = await db.open("testdb");
+    const result = await conn.hmget("user:99", ["username", "verified"]);
+    conn.close();
 
     result.should.deepEqual({ username: "janie", verified: 1 });
   });
@@ -554,9 +682,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db
-        .open("testdb")
-        .hmget("user1", ["username", "verified"]);
+      const conn = await db.open("testdb");
+      const result = await conn.hmget("user1", ["username", "verified"]);
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -565,7 +693,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Reads a single field from a hash`, async () => {
-    const result = await db.open("testdb").hget("user:99", "username");
+    const conn = await db.open("testdb");
+    const result = await conn.hget("user:99", "username");
+    conn.close();
     result.should.equal("janie");
   });
 
@@ -573,7 +703,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").hget("user1", "username");
+      const conn = await db.open("testdb");
+      const result = await conn.hget("user1", "username");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -582,7 +714,9 @@ describe("Isotropy FS", () => {
   });
 
   it(`Reads all fields of a hash`, async () => {
-    const result = await db.open("testdb").hgetall("user:99");
+    const conn = await db.open("testdb");
+    const result = await conn.hgetall("user:99");
+    conn.close();
     result.should.deepEqual({
       username: "janie",
       country: "India",
@@ -594,7 +728,9 @@ describe("Isotropy FS", () => {
     let ex;
 
     try {
-      const result = await db.open("testdb").hgetall("user1");
+      const conn = await db.open("testdb");
+      const result = await conn.hgetall("user1");
+      conn.close();
     } catch (_ex) {
       ex = _ex;
     }
@@ -603,39 +739,48 @@ describe("Isotropy FS", () => {
   });
 
   it(`Increments a field in a hash by N`, async () => {
-    const result = await db.open("testdb").hincrby("user:99", "verified", 2);
+    const conn = await db.open("testdb");
+    const result = await conn.hincrby("user:99", "verified", 2);
+    conn.close();
     result.should.equal(3);
   });
 
   it(`Increments a field in a hash by float N`, async () => {
-    const result = await db
-      .open("testdb")
-      .hincrbyfloat("user:99", "verified", 2.5);
+    const conn = await db.open("testdb");
+    const result = await conn.hincrbyfloat("user:99", "verified", 2.5);
+    conn.close();
     result.should.equal(3.5);
   });
 
   it(`Scans keys`, async () => {
-    const result1 = await db.open("testdb").scan(0, "*", 3);
+    const conn = await db.open("testdb");
+    const result1 = await conn.scan(0, "*", 3);
+    const result2 = await conn.scan(1, "*", 3);
+    conn.close();
     result1.should.deepEqual([2, ["site1", "site2", "site3"]]);
-    const result2 = await db.open("testdb").scan(1, "*", 3);
     result2.should.deepEqual([3, ["site4", "user1", "user2"]]);
   });
 
-
   it(`Scans a set of keys with pattern`, async () => {
-    const result1 = await db.open("testdb").scan(0, "site*");
+    const conn = await db.open("testdb");
+    const result1 = await conn.scan(0, "site*");
+    conn.close();
     result1.should.deepEqual([0, ["site1", "site2", "site3", "site4"]]);
   });
 
   it(`Scans a set of keys with pattern and count`, async () => {
-    const result1 = await db.open("testdb").scan(0, "site*", 3);
+    const conn = await db.open("testdb");
+    const result1 = await conn.scan(0, "site*", 3);
+    const result2 = await conn.scan(1, "site*", 3);
+    conn.close();
     result1.should.deepEqual([2, ["site1", "site2", "site3"]]);
-    const result2 = await db.open("testdb").scan(1, "site*", 3);
     result2.should.deepEqual([0, ["site4"]]);
   });
 
   it(`Scans a set of keys with pattern and large count`, async () => {
-    const result1 = await db.open("testdb").scan(0, "site*", 1000);
+    const conn = await db.open("testdb");
+    const result1 = await conn.scan(0, "site*", 1000);
+    conn.close();
     result1.should.deepEqual([0, ["site1", "site2", "site3", "site4"]]);
   });
 });
