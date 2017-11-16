@@ -31,7 +31,6 @@ describe("Isotropy Redis", () => {
       {
         key: "user1",
         value: "jeswin",
-        tags: ["admin"]
       },
       {
         key: "user2",
