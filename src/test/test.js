@@ -6,8 +6,6 @@ import * as db from "../isotropy-redis";
 
 sourceMapSupport.install();
 
-function table(name) {}
-
 describe("Isotropy Redis", () => {
   beforeEach(() => {
     const objects = [
