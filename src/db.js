@@ -87,7 +87,6 @@ export default class Db {
       })
     );
     try {
-      debugger;
       return await Promise.all(this.transaction.queue.map(fn => fn(this)));
     } catch (ex) {
       this.cursors = snapshot.cursors;
