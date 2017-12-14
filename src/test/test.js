@@ -58,7 +58,7 @@ describe("Isotropy Redis", () => {
     db.init("testdb", objects);
   });
 
-  it(`Returns all keys`, async () => {
+  it(`Gets all keys`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.keys("*");
 
@@ -76,7 +76,7 @@ describe("Isotropy Redis", () => {
     ]);
   });
 
-  it(`Returns all keys starting with site`, async () => {
+  it(`Gets all keys starting with site`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.keys("site*");
     conn.close();
@@ -90,7 +90,7 @@ describe("Isotropy Redis", () => {
     result.should.be.true();
   });
 
-  it(`Rename a key`, async () => {
+  it(`Renames a key`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.rename("site4", "social1");
     conn.close();
@@ -206,7 +206,7 @@ describe("Isotropy Redis", () => {
     );
   });
 
-  it(`Increment a value by one`, async () => {
+  it(`Increments a value by one`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.incr("total");
     conn.close();
@@ -218,7 +218,7 @@ describe("Isotropy Redis", () => {
       .value.should.equal(1001);
   });
 
-  it(`Increment a value by N`, async () => {
+  it(`Increments a value by N`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.incrby("total", 10);
     conn.close();
@@ -230,7 +230,7 @@ describe("Isotropy Redis", () => {
       .value.should.equal(1010);
   });
 
-  it(`Increment a value by Float N`, async () => {
+  it(`Increments a value by Float N`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.incrbyfloat("total", 10.45);
     conn.close();
@@ -270,7 +270,7 @@ describe("Isotropy Redis", () => {
     ex.message.should.equal("The key site1 does not hold a number.");
   });
 
-  it(`Decrement a value by one`, async () => {
+  it(`Decrements a value by one`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.decr("total");
     conn.close();
@@ -282,7 +282,7 @@ describe("Isotropy Redis", () => {
       .value.should.equal(999);
   });
 
-  it(`Decrement a value by N`, async () => {
+  it(`Decrements a value by N`, async () => {
     const conn = await db.open("testdb");
     const result = await conn.decrby("total", 10);
     conn.close();
@@ -331,7 +331,7 @@ describe("Isotropy Redis", () => {
     );
   });
 
-  it(`Remove a value`, async () => {
+  it(`Removes a value`, async () => {
     const conn = await db.open("testdb");
     await conn.del("site4");
     conn.close();
