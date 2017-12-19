@@ -326,7 +326,7 @@ export default class Db {
     return this.transaction;
   }
 
-  open() {
+  async open() {
     this.state = "OPEN";
     return this;
   }
