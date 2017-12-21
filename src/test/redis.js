@@ -1,6 +1,6 @@
-import RedisDb from "../isotropy-redis";
+import Redis from "../isotropy-redis";
 
-export default new RedisDb([
+export default new Redis([
   {
     key: "site1",
     value: "https://www.google.com"

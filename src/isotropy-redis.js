@@ -9,13 +9,14 @@ function isObject(val) {
   return typeof val === "object" && !Array.isArray(val);
 }
 
-export default class Db {
-  constructor(objects) {
-    this.originalObjects = objects;
+class Db {
+  constructor(redis, objects) {
+    this.redis = redis;
     this.init(objects);
   }
 
   init(objects) {
+    this.state = "CLOSED";
     this.cursors = [];
     this.idCounter = 0;
     this.cursorIdCounter = 1;
@@ -23,7 +24,6 @@ export default class Db {
       objects && objects.length
         ? objects.map(x => ({ ...x, __id: this.idCounter++ }))
         : [];
-    this.state = "CLOSED";
     this.transaction = undefined;
   }
 
@@ -62,12 +62,12 @@ export default class Db {
       : fn({ key, value: {} });
   }
 
-  async close() {
-    this.state = "CLOSED";
-  }
-
   __data() {
     return this.objects;
+  }
+
+  async close() {
+    this.state = "CLOSED";
   }
 
   async decr(key) {
@@ -326,11 +326,6 @@ export default class Db {
     return this.transaction;
   }
 
-  async open() {
-    this.state = "OPEN";
-    return this;
-  }
-
   async rename(from, to) {
     return this.objects.some(x => x.key === from)
       ? ((this.objects = this.objects.map(
@@ -338,10 +333,6 @@ export default class Db {
         )),
         "OK")
       : exception(`The key ${from} was not found.`);
-  }
-
-  __reset() {
-    this.init(this.originalObjects);
   }
 
   async rpush(key, list) {
@@ -412,5 +403,21 @@ export default class Db {
         ? obj.value.toString().length
         : exception(`The value with key ${key} is not a string or number.`)
       : exception(`The key ${key} was not found.`);
+  }
+}
+
+export default class Redis {
+  constructor(objects) {
+    this.originalObjects = objects;
+    this.__reset();
+  }
+
+  __reset() {
+    this.db = new Db(this, this.originalObjects);
+  }
+
+  async open() {
+    this.db.state = "OPEN";
+    return this.db;
   }
 }
