@@ -15,7 +15,7 @@ export default class Db {
     this.init(objects);
   }
 
-  init(objects) {
+  private init(objects) {
     this.state = "CLOSED";
     this.cursors = [];
     this.idCounter = 0;
@@ -27,33 +27,33 @@ export default class Db {
     this.transaction = undefined;
   }
 
-  addCursor(position) {
+  private addCursor(position) {
     this.cursors = this.cursors.concat({
       __id: this.cursorIdCounter++,
       position
     });
   }
 
-  addObject(obj) {
+  private addObject(obj) {
     this.objects = this.objects.concat({ ...obj, __id: this.idCounter++ });
   }
 
-  replaceObject(obj, newObj) {
+  private replaceObject(obj, newObj) {
     this.objects = this.objects.map(o => (o === obj ? newObj : o));
   }
 
-  removeCursor(counter) {
+  private removeCursor(counter) {
     this.cursors = this.cursors.filter(x => x.counter === counter);
   }
 
-  withArray(key, fn) {
+  private withArray(key, fn) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj !== "undefined" && Array.isArray(obj.value)
       ? fn(obj)
       : exception(`The value with key ${key} is not an array.`);
   }
 
-  withObject(key, fn) {
+  private withObject(key, fn) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? isObject(obj.value)
