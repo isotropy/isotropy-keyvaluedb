@@ -11,7 +11,7 @@ export default class Redis {
   }
 
   async open() {
-    this.db.open();
+    await this.db.open();
     return this.db;
   }
 }

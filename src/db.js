@@ -62,16 +62,12 @@ export default class Db {
       : fn({ key, value: {} });
   }
 
-  close() {
-    this.state = "CLOSED";
-  }
-
   __data() {
     return this.objects;
   }
 
-  open() {
-    this.state = "OPEN";
+  async close() {
+    this.state = "CLOSED";
   }
 
   async decr(key) {
@@ -328,6 +324,10 @@ export default class Db {
   async multi() {
     this.transaction = new Multi();
     return this.transaction;
+  }
+
+  async open() {
+    this.state = "OPEN";
   }
 
   async rename(from, to) {
