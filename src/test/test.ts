@@ -1,9 +1,5 @@
-import should from "should";
-import * as babel from "babel-core";
-import sourceMapSupport from "source-map-support";
+require("should");
 import redis from "./redis";
-
-sourceMapSupport.install();
 
 describe("Isotropy Redis", () => {
   beforeEach(() => {

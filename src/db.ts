@@ -1,21 +1,79 @@
 import Multi from "./multi";
 import exception from "./exception";
+import Redis from "./isotropy-redis";
 
-function isPrimitive(val) {
+export type RedisPrimitive = string | number;
+
+export type RedisArray = RedisPrimitive[];
+
+export type RedisHash = { [key: string]: RedisPrimitive };
+
+export type RedisValue = RedisPrimitive | RedisHash | RedisArray;
+
+export type RedisObject<T extends RedisValue> = {
+  __id?: number;
+  key: string;
+  value: T;
+  expiry?: number;
+};
+
+function isPrimitive(val: any): val is RedisPrimitive {
   return typeof val === "string" || typeof val === "number";
 }
 
-function isObject(val) {
+function ensurePrimitive(val: any): RedisPrimitive | never {
+  return isPrimitive(val)
+    ? val
+    : exception(
+        `Expected a primitive but received ${
+          typeof val !== "undefined" ? typeof val.value : typeof val
+        }.`
+      );
+}
+
+function isHash(val: any): val is Object {
   return typeof val === "object" && !Array.isArray(val);
 }
 
+function ensureHash(val: any): RedisHash | never {
+  return isHash(val)
+    ? val
+    : exception(
+        `Expected a hash but received ${
+          typeof val !== "undefined" ? typeof val.value : typeof val
+        }.`
+      );
+}
+
+function isArray(val: any): val is RedisArray {
+  return Array.isArray(val);
+}
+
+function ensureArray(val: any): RedisArray | never {
+  return isArray(val)
+    ? val
+    : exception(
+        `Expected an array but received ${
+          typeof val !== "undefined" ? typeof val.value : typeof val
+        }.`
+      );
+}
+
 export default class Db {
-  constructor(redis, objects) {
+  redis: Redis;
+  objects: RedisObject<any>[];
+  state: string;
+  transaction?: Multi;
+  idCounter: number;
+  cursorIdCounter: number;
+  cursors: { __id: number; position: number }[];
+
+  constructor(redis: Redis, objects: RedisObject<RedisValue>[]) {
     this.redis = redis;
     this.init(objects);
   }
 
-  private init(objects) {
+  private init(objects: RedisObject<RedisValue>[]) {
     this.state = "CLOSED";
     this.cursors = [];
     this.idCounter = 0;
@@ -27,36 +85,46 @@ export default class Db {
     this.transaction = undefined;
   }
 
-  private addCursor(position) {
+  private addCursor(position: number) {
     this.cursors = this.cursors.concat({
       __id: this.cursorIdCounter++,
       position
     });
   }
 
-  private addObject(obj) {
+  private addObject<T extends RedisValue>(obj: RedisObject<T>) {
     this.objects = this.objects.concat({ ...obj, __id: this.idCounter++ });
   }
 
-  private replaceObject(obj, newObj) {
+  private replaceObject<TFrom extends RedisValue, TTo extends RedisValue>(
+    obj: RedisObject<TFrom>,
+    newObj: RedisObject<TTo>
+  ) {
     this.objects = this.objects.map(o => (o === obj ? newObj : o));
   }
 
-  private removeCursor(counter) {
-    this.cursors = this.cursors.filter(x => x.counter === counter);
+  private removeCursor(counter: number) {
+    this.cursors = this.cursors.filter(x => x.__id === counter);
   }
 
-  private withArray(key, fn) {
+  private isArray(obj: any): obj is Array<RedisPrimitive> {
+    return Array.isArray(obj);
+  }
+
+  private withArray<T>(
+    key: string,
+    fn: (obj: RedisObject<RedisArray>) => T
+  ): T | never {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj !== "undefined" && Array.isArray(obj.value)
       ? fn(obj)
       : exception(`The value with key ${key} is not an array.`);
   }
 
-  private withObject(key, fn) {
+  private withObject<T>(key: string, fn: (obj: RedisObject<RedisHash>) => T) {
     const obj = this.objects.find(x => x.key === key);
     return obj
-      ? isObject(obj.value)
+      ? isHash(obj.value)
         ? fn(obj)
         : exception(`The value with key ${key} is not an object.`)
       : fn({ key, value: {} });
@@ -70,15 +138,15 @@ export default class Db {
     this.state = "CLOSED";
   }
 
-  async decr(key) {
+  async decr(key: string) {
     return this.incrby(key, -1);
   }
 
-  async decrby(key, n) {
+  async decrby(key: string, n: number) {
     return this.incrby(key, -n);
   }
 
-  async del(key) {
+  async del(key: string) {
     return (this.objects = this.objects.filter(x => x.key !== key)), "OK";
   }
 
@@ -105,11 +173,11 @@ export default class Db {
     }
   }
 
-  async exists(key) {
+  async exists(key: string) {
     return (await this.keys()).includes(key);
   }
 
-  async expire(key, seconds) {
+  async expire(key: string, seconds: number) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj !== "undefined"
       ? (() => {
@@ -120,29 +188,23 @@ export default class Db {
       : exception(`The key ${key} was not found.`);
   }
 
-  async get(key) {
+  async get(key: string) {
     const obj = this.objects.find(x => x.key === key);
-    return obj && isPrimitive(obj.value)
-      ? obj.value
-      : exception(
-          `The typeof value with key ${key} is ${
-            Array.isArray(obj.value) ? "array" : typeof obj.value
-          }. Cannot use get.`
-        );
+    return obj && ensurePrimitive(obj.value);
   }
 
-  async hget(key, field) {
+  async hget(key: string, field: string) {
     return this.withObject(key, obj => obj.value[field]);
   }
 
-  async hgetall(key) {
+  async hgetall(key: string) {
     return this.withObject(key, obj => obj.value);
   }
 
-  async hincrby(key, field, n) {
+  async hincrby(key: string, field: string, n: number) {
     return this.withObject(key, obj => {
       const val = obj.value[field];
-      return !isNaN(val)
+      return typeof val === "number"
         ? (() => {
             const newVal = parseInt(val) + n;
             this.replaceObject(obj, {
@@ -150,6 +212,7 @@ export default class Db {
               value: { ...obj.value, [field]: newVal }
             });
             return newVal;
+            s;
           })()
         : exception(
             `The field ${field} of object with key ${key} does not hold a number.`
@@ -157,10 +220,10 @@ export default class Db {
     });
   }
 
-  async hincrbyfloat(key, field, n) {
+  async hincrbyfloat(key: string, field: string, n: number) {
     return this.withObject(key, obj => {
       const val = obj.value[field];
-      return !isNaN(val)
+      return typeof val === "number"
         ? (() => {
             const newVal = parseFloat(val) + n;
             this.replaceObject(obj, {
@@ -175,13 +238,13 @@ export default class Db {
     });
   }
 
-  async hmget(key, fields) {
+  async hmget(key: string, fields: string[]) {
     return this.withObject(key, obj =>
       fields.reduce((acc, field) => ({ ...acc, [field]: obj.value[field] }), {})
     );
   }
 
-  async hmset(key, newObj) {
+  async hmset(key: string, newObj: object) {
     const obj = this.objects.find(x => x.key === key);
     return !obj
       ? (this.addObject({
@@ -189,7 +252,7 @@ export default class Db {
           value: newObj
         }),
         "OK")
-      : isObject(obj.value)
+      : isHash(obj.value)
         ? (this.replaceObject(obj, {
             ...obj,
             value: { ...obj.value, ...newObj }
@@ -198,7 +261,7 @@ export default class Db {
         : exception(`The value with key ${key} is not an object.`);
   }
 
-  async hset(key, field, value) {
+  async hset(key: string, field: string, value: RedisPrimitive) {
     const obj = this.objects.find(x => x.key === key);
     return !obj
       ? (this.addObject({
@@ -206,7 +269,7 @@ export default class Db {
           value: { [field]: value }
         }),
         "OK")
-      : isObject(obj.value)
+      : isHash(obj.value)
         ? (this.replaceObject(obj, {
             ...obj,
             value: { ...obj.value, [field]: value }
@@ -215,11 +278,11 @@ export default class Db {
         : exception(`The value with key ${key} is not an object.`);
   }
 
-  async incr(key) {
+  async incr(key: string) {
     return this.incrby(key, 1);
   }
 
-  async incrby(key, n) {
+  async incrby(key: string, n: number) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
@@ -232,7 +295,7 @@ export default class Db {
       : exception(`The key ${key} was not found.`);
   }
 
-  async incrbyfloat(key, n) {
+  async incrbyfloat(key: string, n: number) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? !isNaN(obj.value)
@@ -248,22 +311,22 @@ export default class Db {
       : exception(`The key ${key} was not found.`);
   }
 
-  async keys(_pattern) {
+  async keys(_pattern?: string) {
     const pattern = _pattern === "*" ? "" : _pattern;
     return this.objects
-      .filter(x => new RegExp(pattern).test(x.key))
+      .filter(x => new RegExp(pattern || "").test(x.key))
       .map(x => x.key);
   }
 
-  async lindex(key, index) {
+  async lindex(key: string, index: number) {
     return this.withArray(key, obj => obj.value.slice(index)[0]);
   }
 
-  async llen(key) {
+  async llen(key: string) {
     return this.withArray(key, obj => obj.value.length);
   }
 
-  async lpush(key, list) {
+  async lpush(key: string, list: RedisArray) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj === "undefined"
       ? (this.addObject({
@@ -280,7 +343,7 @@ export default class Db {
         : exception(`The value with key ${key} is not an array.`);
   }
 
-  async lrange(key, _from, _to) {
+  async lrange(key: string, _from: number, _to: number) {
     return this.withArray(key, obj => {
       const from = typeof _from !== "undefined" ? _from : 0;
       const to = typeof _to !== "undefined" ? _to : obj.value.length - 1;
@@ -288,7 +351,7 @@ export default class Db {
     });
   }
 
-  async lrem(key, value) {
+  async lrem(key: string, value: RedisPrimitive) {
     return this.withArray(key, obj => {
       this.replaceObject(obj, {
         ...obj,
@@ -298,7 +361,7 @@ export default class Db {
     });
   }
 
-  async lset(key, _index, value) {
+  async lset(key: string, _index: number, value: RedisPrimitive) {
     return this.withArray(key, obj => {
       const index = _index >= 0 ? _index : obj.value.length + _index;
       return index >= 0
@@ -312,7 +375,7 @@ export default class Db {
     });
   }
 
-  async ltrim(key, _from, _to) {
+  async ltrim(key: string, _from: number, _to: number) {
     return this.withArray(key, obj => {
       const from = typeof _from !== "undefined" ? _from : 0;
       const to = typeof _to !== "undefined" ? _to : obj.value.length - 1;
@@ -330,7 +393,7 @@ export default class Db {
     this.state = "OPEN";
   }
 
-  async rename(from, to) {
+  async rename(from: string, to: string) {
     return this.objects.some(x => x.key === from)
       ? ((this.objects = this.objects.map(
           x => (x.key === from ? { ...x, key: to } : x)
@@ -339,7 +402,7 @@ export default class Db {
       : exception(`The key ${from} was not found.`);
   }
 
-  async rpush(key, list) {
+  async rpush(key: string, list: RedisArray) {
     const obj = this.objects.find(x => x.key === key);
     return typeof obj === "undefined"
       ? (this.addObject({
@@ -356,7 +419,7 @@ export default class Db {
         : exception(`The value with key ${key} is not an array.`);
   }
 
-  async scan(cursorId, _pattern, _count) {
+  async scan(cursorId: number, _pattern: string, _count: number) {
     const self = this;
 
     const pattern =
@@ -388,7 +451,7 @@ export default class Db {
       : [0, []];
   }
 
-  async set(key, value, expiry) {
+  async set(key: string, value: RedisPrimitive, expiry: number) {
     const obj = this.objects.find(x => x.key === key);
     const newObj = {
       key,
@@ -400,7 +463,7 @@ export default class Db {
     );
   }
 
-  async strlen(key) {
+  async strlen(key: string) {
     const obj = this.objects.find(x => x.key === key);
     return obj
       ? typeof obj.value === "string" || typeof obj.value === "number"
