@@ -1,5 +1,12 @@
 require("should");
 import redis from "./redis";
+import exception from "../exception";
+import Db from "../db";
+
+function findByKey(db: Db, key: string) {
+  const item = db.__data().find(x => x.key === key);
+  return item || exception(`TEST ERROR: key ${key} not found.`);
+}
 
 describe("Isotropy Redis", () => {
   beforeEach(() => {
@@ -42,10 +49,7 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     const result = await db.rename("site4", "social1");
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "social1")
-      .value.should.equal("https://www.twitter.com");
+    findByKey(db, "social1").value.should.equal("https://www.twitter.com");
   });
 
   it(`Fails to rename a missing key`, async () => {
@@ -67,10 +71,7 @@ describe("Isotropy Redis", () => {
     await db.set("site5", "https://www.looptype.com");
     db.close();
 
-    db
-      .__data("testdb")
-      .find(x => x.key === "site5")
-      .value.should.equal("https://www.looptype.com");
+    findByKey(db, "site5").value.should.equal("https://www.looptype.com");
   });
 
   it(`Replaces a value`, async () => {
@@ -78,10 +79,7 @@ describe("Isotropy Redis", () => {
     await db.set("site4", "https://www.looptype.com");
     db.close();
 
-    db
-      .__data("testdb")
-      .find(x => x.key === "site4")
-      .value.should.equal("https://www.looptype.com");
+    findByKey(db, "site4").value.should.equal("https://www.looptype.com");
   });
 
   it(`Executes a transaction`, async () => {
@@ -92,13 +90,10 @@ describe("Isotropy Redis", () => {
     await multi.incr("total");
     await multi.incr("total");
     const result = await db.exec();
+    should.exist(result);
+    result && result.should.deepEqual(["OK", 1001, 1002]);
 
-    result.should.deepEqual(['OK', 1001, 1002]);
-    
-    db
-      .__data("testdb")
-      .find(x => x.key === "site4")
-      .value.should.equal("https://www.looptype.com");
+    findByKey(db, "site4").value.should.equal("https://www.looptype.com");
   });
 
   it(`Rolls back a failed transaction`, async () => {
@@ -109,17 +104,15 @@ describe("Isotropy Redis", () => {
     await multi.incr("total1");
     const result = await db.exec();
 
-    db
-      .__data("testdb")
-      .find(x => x.key === "site4")
-      .value.should.equal("https://www.twitter.com");
+    findByKey(db, "site4").value.should.equal("https://www.twitter.com");
   });
 
   it(`Gets a value`, async () => {
     const db = await redis.open();
     const result = await db.get("site4");
     db.close();
-    result.should.equal("https://www.twitter.com");
+    should.exist(result);
+    result && result.should.equal("https://www.twitter.com");
   });
 
   it(`Fails to get a value if it's an array`, async () => {
@@ -160,10 +153,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     result.should.equal(1001);
-    db
-      .__data("testdb")
-      .find(x => x.key === "total")
-      .value.should.equal(1001);
+    findByKey(db, "total").value.should.equal(1001);
   });
 
   it(`Increments a value by N`, async () => {
@@ -172,10 +162,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     result.should.equal(1010);
-    db
-      .__data("testdb")
-      .find(x => x.key === "total")
-      .value.should.equal(1010);
+    findByKey(db, "total").value.should.equal(1010);
   });
 
   it(`Increments a value by Float N`, async () => {
@@ -184,10 +171,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     result.should.equal(1010.45);
-    db
-      .__data("testdb")
-      .find(x => x.key === "total")
-      .value.should.equal(1010.45);
+    findByKey(db, "total").value.should.equal(1010.45);
   });
 
   it(`Fails to increment missing item`, async () => {
@@ -224,10 +208,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     result.should.equal(999);
-    db
-      .__data("testdb")
-      .find(x => x.key === "total")
-      .value.should.equal(999);
+    findByKey(db, "total").value.should.equal(999);
   });
 
   it(`Decrements a value by N`, async () => {
@@ -236,10 +217,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     result.should.equal(990);
-    db
-      .__data("testdb")
-      .find(x => x.key === "total")
-      .value.should.equal(990);
+    findByKey(db, "total").value.should.equal(990);
   });
 
   it(`Gets the length of a string`, async () => {
@@ -283,10 +261,7 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     await db.del("site4");
     db.close();
-    db
-      .__data("testdb")
-      .filter(x => x.key === "site4")
-      .should.be.empty();
+    findByKey(db, "site4").should.be.empty();
   });
 
   it(`Sets a value with expiry`, async () => {
@@ -295,14 +270,8 @@ describe("Isotropy Redis", () => {
     db.close();
 
     const now = Date.now();
-    db
-      .__data("testdb")
-      .find(x => x.key === "site5")
-      .value.should.equal("https://www.looptype.com");
-    db
-      .__data("testdb")
-      .find(x => x.key === "site5")
-      .expiry.should.be.lessThan(now + 11000);
+    findByKey(db, "site5").value.should.equal("https://www.looptype.com");
+    findByKey(db, "site5").expiry.should.be.lessThan(now + 11000);
   });
 
   it(`Sets an expiry`, async () => {
@@ -311,10 +280,7 @@ describe("Isotropy Redis", () => {
     db.close();
 
     const now = Date.now();
-    db
-      .__data("testdb")
-      .find(x => x.key === "site1")
-      .expiry.should.be.lessThan(now + 11000);
+    findByKey(db, "site1").expiry.should.be.lessThan(now + 11000);
   });
 
   it(`Creates a list`, async () => {
@@ -322,10 +288,7 @@ describe("Isotropy Redis", () => {
     const result = await db.rpush("fruits", ["apple", "mango", "pear"]);
     db.close();
     result.should.equal(3);
-    db
-      .__data("testdb")
-      .find(x => x.key === "fruits")
-      .value.should.deepEqual(["apple", "mango", "pear"]);
+    findByKey(db, "fruits").value.should.deepEqual(["apple", "mango", "pear"]);
   });
 
   it(`Pushes items to an existing list`, async () => {
@@ -333,16 +296,13 @@ describe("Isotropy Redis", () => {
     const result = await db.rpush("countries", ["bulgaria", "sweden"]);
     db.close();
     result.should.equal(5);
-    db
-      .__data("testdb")
-      .find(x => x.key === "countries")
-      .value.should.deepEqual([
-        "vietnam",
-        "france",
-        "belgium",
-        "bulgaria",
-        "sweden"
-      ]);
+    findByKey(db, "countries").value.should.deepEqual([
+      "vietnam",
+      "france",
+      "belgium",
+      "bulgaria",
+      "sweden"
+    ]);
   });
 
   it(`Fails to push on non-list`, async () => {
@@ -363,16 +323,13 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     await db.lpush("countries", ["bulgaria", "sweden"]);
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "countries")
-      .value.should.deepEqual([
-        "bulgaria",
-        "sweden",
-        "vietnam",
-        "france",
-        "belgium"
-      ]);
+    findByKey(db, "countries").value.should.deepEqual([
+      "bulgaria",
+      "sweden",
+      "vietnam",
+      "france",
+      "belgium"
+    ]);
   });
 
   it(`Fails to prepend on non-list`, async () => {
@@ -414,10 +371,11 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     const result = await db.lset("countries", 1, "thailand");
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "countries")
-      .value.should.deepEqual(["vietnam", "thailand", "belgium"]);
+    findByKey(db, "countries").value.should.deepEqual([
+      "vietnam",
+      "thailand",
+      "belgium"
+    ]);
   });
 
   it(`Fails to set an item at index on non-list`, async () => {
@@ -480,10 +438,7 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     const result = await db.lrem("countries", "belgium");
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "countries")
-      .value.should.deepEqual(["vietnam", "france"]);
+    findByKey(db, "countries").value.should.deepEqual(["vietnam", "france"]);
   });
 
   it(`Fails to remove an item on non-list`, async () => {
@@ -504,10 +459,7 @@ describe("Isotropy Redis", () => {
     const db = await redis.open();
     const result = await db.ltrim("countries", 1, 2);
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "countries")
-      .value.should.deepEqual(["france", "belgium"]);
+    findByKey(db, "countries").value.should.deepEqual(["france", "belgium"]);
   });
 
   it(`Fails to trim on non-list`, async () => {
@@ -553,14 +505,11 @@ describe("Isotropy Redis", () => {
       verified: 1
     });
     db.close();
-    db
-      .__data("testdb")
-      .find(x => x.key === "user:100")
-      .value.should.deepEqual({
-        username: "jeswin",
-        country: "India",
-        verified: 1
-      });
+    findByKey(db, "user:100").value.should.deepEqual({
+      username: "jeswin",
+      country: "India",
+      verified: 1
+    });
   });
 
   it(`Merges into an existing hash`, async () => {
@@ -568,16 +517,13 @@ describe("Isotropy Redis", () => {
     await db.hmset("user:99", { city: "Bombay", blocked: 1 });
     db.close();
 
-    db
-      .__data("testdb")
-      .find(x => x.key === "user:99")
-      .value.should.deepEqual({
-        username: "janie",
-        country: "India",
-        city: "Bombay",
-        blocked: 1,
-        verified: 1
-      });
+    findByKey(db, "user:99").value.should.deepEqual({
+      username: "janie",
+      country: "India",
+      city: "Bombay",
+      blocked: 1,
+      verified: 1
+    });
   });
 
   it(`Fails to set fields in hash if item is a non-hash`, async () => {
@@ -603,15 +549,12 @@ describe("Isotropy Redis", () => {
     await db.hset("user:99", "city", "Bombay");
     db.close();
 
-    db
-      .__data("testdb")
-      .find(x => x.key === "user:99")
-      .value.should.deepEqual({
-        username: "janie",
-        country: "India",
-        city: "Bombay",
-        verified: 1
-      });
+    findByKey(db, "user:99").value.should.deepEqual({
+      username: "janie",
+      country: "India",
+      city: "Bombay",
+      verified: 1
+    });
   });
 
   it(`Reads fields of a hash`, async () => {

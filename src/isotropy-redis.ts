@@ -1,7 +1,10 @@
-import Db from "./db";
+import Db, { UnsavedRedisObject, RedisValue } from "./db";
 
 export default class Redis {
-  constructor(objects) {
+  originalObjects: UnsavedRedisObject<RedisValue>[];
+  db: Db;
+
+  constructor(objects: UnsavedRedisObject<RedisValue>[]) {
     this.originalObjects = objects;
     this.__reset();
   }
