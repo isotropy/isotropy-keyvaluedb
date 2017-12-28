@@ -32,12 +32,19 @@ function isPrimitive(val: any): val is RedisPrimitive {
   return typeof val === "string" || typeof val === "number";
 }
 
-function ensurePrimitive(obj: any): RedisObject<RedisPrimitive> | never {
+function ensurePrimitive(
+  obj: any,
+  key: string
+): RedisObject<RedisPrimitive> | never {
   return obj && isPrimitive(obj.value)
     ? obj
     : exception(
-        `Expected a primitive but received ${
-          typeof obj !== "undefined" ? typeof obj.value : "undefined"
+        `Expected the value of '${key}' to be a primitive but received ${
+          obj
+            ? isArray(obj.value)
+              ? "array"
+              : isHash(obj.value) ? "hash" : typeof obj.value
+            : "undefined"
         }.`
       );
 }
@@ -46,11 +53,11 @@ function isHash(val: any): val is Object {
   return typeof val === "object" && !Array.isArray(val);
 }
 
-function ensureHash(obj: any): RedisObject<RedisHash> | never {
+function ensureHash(obj: any, key: string): RedisObject<RedisHash> | never {
   return obj && isHash(obj.value)
     ? obj
     : exception(
-        `Expected a hash but received ${
+        `Expected the value of '${key}' to be a hash but received ${
           typeof obj !== "undefined" ? typeof obj.value : "undefined"
         }.`
       );
@@ -60,11 +67,11 @@ function isArray(val: any): val is RedisArray {
   return Array.isArray(val);
 }
 
-function ensureArray(obj: any): RedisObject<RedisArray> | never {
+function ensureArray(obj: any, key: string): RedisObject<RedisArray> | never {
   return obj && isArray(obj.value)
     ? obj
     : exception(
-        `Expected an array but received ${
+        `Expected the value of '${key}' to be an array but received ${
           typeof obj !== "undefined" ? typeof obj.value : "undefined"
         }.`
       );
@@ -104,7 +111,11 @@ export default class Db {
   }
 
   private addObject<T extends RedisValue>(obj: UnsavedRedisObject<T>) {
-    this.objects = this.objects.concat({ expiry: -1, ...obj, __id: this.idCounter++ });
+    this.objects = this.objects.concat({
+      expiry: -1,
+      ...obj,
+      __id: this.idCounter++
+    });
   }
 
   private replaceObject<TFrom extends RedisValue, TTo extends RedisValue>(
@@ -123,12 +134,12 @@ export default class Db {
     fn: (obj: RedisObject<RedisArray>) => T
   ): T | never {
     const obj = this.objects.find(x => x.key === key);
-    return fn(ensureArray(obj));
+    return fn(ensureArray(obj, key));
   }
 
   private withObject<T>(key: string, fn: (obj: RedisObject<RedisHash>) => T) {
     const obj = this.objects.find(x => x.key === key);
-    return fn(ensureHash(obj));
+    return fn(ensureHash(obj, key));
   }
 
   private findCursor(cursorId: number) {
@@ -197,7 +208,7 @@ export default class Db {
 
   async get(key: string) {
     const obj = this.objects.find(x => x.key === key);
-    return obj && ensurePrimitive(obj.value);
+    return !obj ? undefined : ensurePrimitive(obj, key).value;
   }
 
   async hget(key: string, field: string) {
@@ -260,7 +271,7 @@ export default class Db {
         "OK")
       : (this.replaceObject(obj, {
           ...obj,
-          value: { ...ensureHash(obj).value, ...newObj }
+          value: { ...ensureHash(obj, key).value, ...newObj }
         }),
         "OK");
   }
@@ -275,7 +286,7 @@ export default class Db {
         "OK")
       : (this.replaceObject(obj, {
           ...obj,
-          value: { ...ensureHash(obj).value, [field]: value }
+          value: { ...ensureHash(obj, key).value, [field]: value }
         }),
         "OK");
   }
