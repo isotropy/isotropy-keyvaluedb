@@ -1,6 +1,6 @@
 import Db, { UnsavedRedisObject, RedisValue } from "./db";
 
-export default class Redis {
+export class Redis {
   originalObjects: UnsavedRedisObject<RedisValue>[];
   db: Db;
 
@@ -17,4 +17,10 @@ export default class Redis {
     await this.db.open();
     return this.db;
   }
+}
+
+export default function create(
+  objects: UnsavedRedisObject<RedisValue>[]
+): Redis {
+  return new Redis(objects);
 }

@@ -1,5 +1,5 @@
 import exception from "./exception";
-import Redis from "./isotropy-redis";
+import { Redis } from "./isotropy-redis";
 import Multi from "./multi";
 
 export type RedisPrimitive = string | number;
