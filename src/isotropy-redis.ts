@@ -19,7 +19,7 @@ export class Redis {
   }
 }
 
-export default function create(
+export function redis(
   objects: UnsavedRedisObject<RedisValue>[]
 ): Redis {
   return new Redis(objects);
