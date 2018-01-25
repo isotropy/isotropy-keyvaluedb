@@ -1,6 +1,6 @@
 {
   "name": "isotropy-redis",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "author": "Isotropy Team<isotropy@agilehead.com>",
   "contributors": [
     "Jeswin Kumar<jeswinpk@agilehead.com>"
@@ -12,10 +12,11 @@
   },
   "main": "dist/isotropy-redis.js",
   "types": "dist/isotropy-redis.d.ts",
-  "dependencies": {},
+  "dependencies": {
+    "@types/node": "^8.0.57"
+  },
   "devDependencies": {
     "@types/mocha": "^2.2.44",
-    "@types/node": "^8.0.57",
     "@types/should": "^11.2.0",
     "mocha": "*",
     "should": "*"
